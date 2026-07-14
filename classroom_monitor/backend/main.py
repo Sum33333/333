@@ -309,6 +309,9 @@ async def connect_api(
     global _external_mode, _user_api, _user_api_meta, _rooms
 
     api_url = normalize_api_url(str(payload.get("api_url", "")))
+    if "/api/mock-platform" in api_url:
+        port = int(os.environ.get("PORT", "8080"))
+        api_url = f"http://127.0.0.1:{port}/api/mock-platform"
     api_key = str(payload.get("api_key") or "").strip()
     session = UserApiSession(base_url=api_url, api_key=api_key)
     result = await session.test_and_load()

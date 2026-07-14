@@ -38,7 +38,7 @@ async function api(path, opts = {}) {
 }
 
 function frameUrl(roomId) {
-  return `/api/rooms/${roomId}/frame.jpg?t=${Date.now()}`;
+  return `/api/rooms/${roomId}/frame.jpg?token=${encodeURIComponent(token)}&t=${Date.now()}`;
 }
 
 function mjpegUrl(roomId) {
@@ -181,8 +181,8 @@ function renderStream() {
     const room = rooms.find((r) => r.id === selectedId);
     area.innerHTML = `
       <div class="stream-single">
-        <img src="${mjpegUrl(selectedId)}" alt="${room?.building} ${room?.room}" />
-        <p class="stream-note">MJPEG 实时流 · ${externalConnected ? "外部 API" : "本地演示"}</p>
+        <img id="singleFrame" src="${frameUrl(selectedId)}" alt="${room?.building} ${room?.room}" />
+        <p class="stream-note">实时画面（约每秒刷新）· ${externalConnected ? "外部 API" : "本地演示"}</p>
       </div>`;
     return;
   }
@@ -409,12 +409,17 @@ $("singleViewBtn").addEventListener("click", () => {
 });
 
 setInterval(() => {
-  if (!token || viewMode !== "grid") return;
-  document.querySelectorAll(".grid-card img").forEach((img) => {
-    const id = img.closest(".grid-card")?.dataset.id;
-    if (id) img.src = frameUrl(id);
-  });
-}, 3000);
+  if (!token) return;
+  if (viewMode === "grid") {
+    document.querySelectorAll(".grid-card img").forEach((img) => {
+      const id = img.closest(".grid-card")?.dataset.id;
+      if (id) img.src = frameUrl(id);
+    });
+  } else if (viewMode === "single" && selectedId) {
+    const img = document.getElementById("singleFrame");
+    if (img) img.src = frameUrl(selectedId);
+  }
+}, 1000);
 
 // 一键填入测试 API
 $("mockApiExample").addEventListener("click", () => {
