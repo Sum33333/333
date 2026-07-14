@@ -18,6 +18,19 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
+from classroom_monitor.backend.config import (
+    CAMPUS,
+    CAS_ENABLED,
+    CENTRAL_CONTROL_API_URL,
+    NETC_PORTAL_URL,
+    ORG_NAME,
+    PANYU_CLASSROOM_COUNT_EST,
+    PUBLIC_BASE_URL,
+    RECORDER_API_URL,
+    SUPPORT_EMAIL,
+    SUPPORT_PHONE,
+)
+from classroom_monitor.backend.cas_auth import cas_login_redirect_url, cas_logout_redirect_url, is_cas_enabled, validate_cas_ticket
 from classroom_monitor.backend.mock_stream import jitter_status, render_mock_frame
 from classroom_monitor.backend.rooms import PANYU_CLASSROOMS, Classroom
 
@@ -35,7 +48,11 @@ def _snapshot() -> dict[str, Any]:
     in_use = sum(1 for r in _rooms.values() if r.status == "in_use")
     fault = sum(1 for r in _rooms.values() if r.status == "fault")
     return {
-        "campus": "番禺校区",
+        "campus": CAMPUS,
+        "org": ORG_NAME,
+        "portal": NETC_PORTAL_URL,
+        "public_url": PUBLIC_BASE_URL,
+        "classroom_capacity_est": PANYU_CLASSROOM_COUNT_EST,
         "updated_at": datetime.now().isoformat(timespec="seconds"),
         "total": len(_rooms),
         "online": online,
@@ -105,7 +122,49 @@ def require_admin(authorization: str | None = Header(default=None), token: str |
 
 @app.get("/api/health")
 def health():
-    return {"ok": True, "demo_mode": DEMO_MODE}
+    return {
+        "ok": True,
+        "demo_mode": DEMO_MODE,
+        "cas_enabled": is_cas_enabled(),
+        "recorder_api": bool(RECORDER_API_URL),
+        "central_control_api": bool(CENTRAL_CONTROL_API_URL),
+    }
+
+
+@app.get("/api/config")
+def public_config():
+    """前端初始化：NETC 门户链接、CAS 登录地址等。"""
+    return {
+        "org": ORG_NAME,
+        "campus": CAMPUS,
+        "portal_url": NETC_PORTAL_URL,
+        "public_url": PUBLIC_BASE_URL,
+        "support_phone": SUPPORT_PHONE,
+        "support_email": SUPPORT_EMAIL,
+        "demo_mode": DEMO_MODE,
+        "cas_enabled": is_cas_enabled(),
+        "cas_login_url": cas_login_redirect_url() if is_cas_enabled() else None,
+        "classroom_capacity_est": PANYU_CLASSROOM_COUNT_EST,
+    }
+
+
+@app.get("/api/auth/cas/callback")
+def cas_callback(ticket: str = Query(...), service: str | None = None):
+    """CAS 登录回调：校验 ticket 后返回会话令牌（生产需换 JWT/Redis 会话）。"""
+    user = validate_cas_ticket(ticket, service)
+    if not user:
+        raise HTTPException(401, "CAS 票据无效或未启用")
+    # 演示：直接返回固定格式令牌；生产应签发短期 JWT
+    return {
+        "jnuid": user,
+        "token": ADMIN_TOKEN,
+        "message": "CAS 验证通过（演示环境仍使用运维令牌访问 API）",
+    }
+
+
+@app.get("/api/auth/cas/logout")
+def cas_logout():
+    return {"logout_url": cas_logout_redirect_url()}
 
 
 @app.get("/api/summary")

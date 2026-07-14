@@ -66,6 +66,10 @@ h1 { margin: 0; font-size: 18px; }
   border: 1px solid var(--border); background: #0c0f15; color: var(--text);
 }
 .compliance { font-size: 12px; color: var(--muted); line-height: 1.6; margin-top: 18px; }
+.netc-link { font-size: 13px; color: var(--muted); margin: 0 0 14px; }
+.netc-link a { color: #7eb8ff; }
+.btn.cas { width: 100%; margin-bottom: 12px; background: linear-gradient(135deg, #1a5fb4, #0d3d7a); border: none; }
+.divider { text-align: center; color: var(--muted); font-size: 12px; margin: 12px 0; }
 
 .app {
   display: grid; grid-template-columns: 340px 1fr; min-height: calc(100vh - 110px);

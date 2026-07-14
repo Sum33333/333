@@ -12,7 +12,33 @@ let selectedId = null;
 let viewMode = "grid"; // grid | single
 let ws = null;
 
+let siteConfig = {};
+
 const $ = (id) => document.getElementById(id);
+
+async function loadSiteConfig() {
+  try {
+    const res = await fetch("/api/config");
+    siteConfig = await res.json();
+    if (siteConfig.cas_enabled && siteConfig.cas_login_url) {
+      $("casLoginBtn").classList.remove("hidden");
+      $("loginDivider").classList.remove("hidden");
+      $("casLoginBtn").onclick = () => {
+        window.location.href = siteConfig.cas_login_url;
+      };
+    }
+    $("footerMeta").textContent = `${siteConfig.campus} · 服务热线 ${siteConfig.support_phone}`;
+    if (siteConfig.demo_mode) {
+      $("demoBadge").classList.remove("hidden");
+    } else {
+      $("demoBadge").classList.add("hidden");
+    }
+  } catch (_) {
+    /* ignore */
+  }
+}
+
+loadSiteConfig();
 
 function authHeaders() {
   return { Authorization: `Bearer ${token}` };
@@ -52,7 +78,9 @@ function renderSummary() {
       <div class="card"><div class="num">${num ?? "—"}</div><div class="lbl">${lbl}</div></div>`
     )
     .join("");
-  $("updatedAt").textContent = summary.updated_at ? `更新于 ${summary.updated_at}` : "—";
+  if ($("footerMeta") && (siteConfig.support_phone || summary.updated_at)) {
+    $("footerMeta").textContent = `${summary.campus || siteConfig.campus || "番禺校区"} · 课室约 ${summary.classroom_capacity_est || siteConfig.classroom_capacity_est || "—"} 间 · 更新 ${summary.updated_at || "—"}`;
+  }
   $("demoBadge").classList.toggle("hidden", !summary.demo_mode);
 }
 

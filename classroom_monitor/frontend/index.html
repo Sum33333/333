@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>暨南大学 · 番禺校区教室监控</title>
+  <title>暨南大学 · 番禺校区教室设备监控 | NETC</title>
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
@@ -12,7 +12,7 @@
       <div class="logo">暨</div>
       <div>
         <h1>番禺校区教室设备监控</h1>
-        <p class="subtitle">校内运维后台 · 设备状态与画面预览</p>
+        <p class="subtitle">网络与教育技术中心 · 校内运维后台</p>
       </div>
     </div>
     <div class="top-actions">
@@ -24,8 +24,14 @@
 
   <section id="loginPanel" class="login-panel">
     <div class="login-card">
-      <h2>管理员登录</h2>
-      <p>请输入校内运维后台令牌。默认演示令牌：<code>jnu-demo-admin</code></p>
+      <h2>运维人员登录</h2>
+      <p class="netc-link">
+        主管部门：<a href="https://netc.jnu.edu.cn/" target="_blank" rel="noopener">网络与教育技术中心</a>
+        · 用户服务 <a href="https://mynet.jnu.edu.cn/" target="_blank" rel="noopener">MyNET</a>
+      </p>
+      <button id="casLoginBtn" class="btn cas hidden" type="button">使用 JNUID 统一认证登录</button>
+      <div class="divider hidden" id="loginDivider">或</div>
+      <p>运维令牌（演示默认 <code>jnu-demo-admin</code>）</p>
       <label>
         访问令牌
         <input id="tokenInput" type="password" placeholder="Bearer token" value="jnu-demo-admin" />
@@ -84,8 +90,8 @@
   </main>
 
   <footer class="footer">
-  <span>暨南大学番禺校区 · 教室多媒体运维演示系统</span>
-  <span id="updatedAt">—</span>
+  <span>暨南大学网络与教育技术中心 · 番禺校区多媒体课室运维</span>
+  <span id="footerMeta">—</span>
   </footer>
 
   <script src="/static/app.js"></script>
