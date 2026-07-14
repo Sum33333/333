@@ -95,7 +95,8 @@ h1 { margin: 0; font-size: 18px; }
   background: #0c0f15; color: var(--text);
 }
 
-.room-list { display: grid; gap: 8px; }
+.room-list { display: grid; gap: 8px; max-height: calc(100vh - 320px); overflow-y: auto; }
+.list-meta { font-size: 11px; color: var(--muted); padding: 4px 2px 8px; }
 .room-item {
   border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px;
   background: #12161f; cursor: pointer; transition: .15s;

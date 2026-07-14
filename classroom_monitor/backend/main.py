@@ -19,9 +19,12 @@ from fastapi.responses import HTMLResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from classroom_monitor.backend.config import (
+    AGENT_TOKEN,
     CAMPUS,
     CAS_ENABLED,
     CENTRAL_CONTROL_API_URL,
+    DEMO_AGENT_PUSH,
+    DEMO_MODE,
     NETC_PORTAL_URL,
     ORG_NAME,
     PANYU_CLASSROOM_COUNT_EST,
@@ -31,11 +34,12 @@ from classroom_monitor.backend.config import (
     SUPPORT_PHONE,
 )
 from classroom_monitor.backend.cas_auth import cas_login_redirect_url, cas_logout_redirect_url, is_cas_enabled, validate_cas_ticket
+from classroom_monitor.backend.demo_agent import demo_agent_loop
 from classroom_monitor.backend.mock_stream import jitter_status, render_mock_frame
+from classroom_monitor.backend.platform_sync import PlatformClient, merge_platform_status
 from classroom_monitor.backend.rooms import PANYU_CLASSROOMS, Classroom
 
 ADMIN_TOKEN = os.environ.get("CLASSROOM_ADMIN_TOKEN", "jnu-demo-admin")
-DEMO_MODE = os.environ.get("CLASSROOM_DEMO_MODE", "1") != "0"
 
 _rooms: dict[str, Classroom] = {r.id: r for r in PANYU_CLASSROOMS}
 _rng = random.Random(7)
@@ -60,6 +64,9 @@ def _snapshot() -> dict[str, Any]:
         "fault": fault,
         "idle": online - in_use - fault,
         "demo_mode": DEMO_MODE,
+        "platform_live": _platform.live,
+        "agent_frames": len(_agent_frames),
+        "demo_agent": DEMO_AGENT_PUSH,
     }
 
 
@@ -85,15 +92,53 @@ async def _telemetry_loop() -> None:
         await asyncio.sleep(2.0)
 
 
+_agent_frames: dict[str, bytes] = {}
+_platform = PlatformClient()
+_recorder_cache: dict[str, bytes] = {}
+
+
+async def _platform_sync_loop() -> None:
+    """定时从集控/录播平台同步（不可达时静默跳过）。"""
+    if not _platform.live:
+        return
+    while True:
+        try:
+            bulk = await _platform.fetch_all_status()
+            if bulk:
+                by_id = {str(x.get("id") or x.get("room_id")): x for x in bulk}
+                for rid, room in list(_rooms.items()):
+                    if rid in by_id:
+                        _rooms[rid] = merge_platform_status(room, by_id[rid])
+            for rid, room in list(_rooms.items()):
+                if room.status in ("in_use", "idle"):
+                    snap = await _platform.fetch_snapshot_bytes(rid)
+                    if snap:
+                        _recorder_cache[rid] = snap
+                        _agent_frames[rid] = snap
+        except Exception:
+            pass
+        await asyncio.sleep(10.0)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    task = asyncio.create_task(_telemetry_loop())
+    tasks = [asyncio.create_task(_telemetry_loop())]
+    if _platform.live:
+        tasks.append(asyncio.create_task(_platform_sync_loop()))
+    if DEMO_AGENT_PUSH:
+        tasks.append(
+            asyncio.create_task(
+                demo_agent_loop(_rooms, _agent_frames, lambda: _tick, interval=1.0, max_rooms=50)
+            )
+        )
     yield
-    task.cancel()
-    try:
-        await task
-    except asyncio.CancelledError:
-        pass
+    for t in tasks:
+        t.cancel()
+    for t in tasks:
+        try:
+            await t
+        except asyncio.CancelledError:
+            pass
 
 
 app = FastAPI(
@@ -128,6 +173,9 @@ def health():
         "cas_enabled": is_cas_enabled(),
         "recorder_api": bool(RECORDER_API_URL),
         "central_control_api": bool(CENTRAL_CONTROL_API_URL),
+        "platform_live": _platform.live,
+        "rooms_loaded": len(_rooms),
+        "agent_frames": len(_agent_frames),
     }
 
 
@@ -145,6 +193,8 @@ def public_config():
         "cas_enabled": is_cas_enabled(),
         "cas_login_url": cas_login_redirect_url() if is_cas_enabled() else None,
         "classroom_capacity_est": PANYU_CLASSROOM_COUNT_EST,
+        "rooms_loaded": len(_rooms),
+        "demo_agent": DEMO_AGENT_PUSH,
     }
 
 
@@ -194,9 +244,6 @@ def get_room(room_id: str, _: None = Depends(require_admin)):
     return asdict(room)
 
 
-_agent_frames: dict[str, bytes] = {}
-
-
 @app.post("/api/agent/{room_id}/frame")
 async def agent_push_frame(
     room_id: str,
@@ -204,13 +251,12 @@ async def agent_push_frame(
     authorization: str | None = Header(default=None),
 ):
     """教室 Agent 上报 JPEG 帧。"""
-    agent_token = os.environ.get("AGENT_TOKEN", "")
-    if not agent_token:
-        raise HTTPException(501, "未配置 AGENT_TOKEN，Agent 上报未启用")
+    if not AGENT_TOKEN:
+        raise HTTPException(501, "未配置 AGENT_TOKEN")
     supplied = ""
     if authorization and authorization.lower().startswith("bearer "):
         supplied = authorization.split(" ", 1)[1]
-    if not secrets.compare_digest(supplied, agent_token):
+    if not secrets.compare_digest(supplied, AGENT_TOKEN):
         raise HTTPException(401, "Agent 令牌无效")
     if room_id not in _rooms:
         raise HTTPException(404, "教室不存在")
@@ -218,6 +264,10 @@ async def agent_push_frame(
     if not body:
         raise HTTPException(400, "空帧")
     _agent_frames[room_id] = body
+    room = _rooms[room_id]
+    if room.stream_mode != "agent":
+        from dataclasses import replace
+        _rooms[room_id] = replace(room, stream_mode="agent")
     return {"ok": True, "bytes": len(body)}
 
 
@@ -226,8 +276,10 @@ def room_frame(room_id: str, _: None = Depends(require_admin)):
     room = _rooms.get(room_id)
     if not room:
         raise HTTPException(404, "教室不存在")
-    if room.stream_mode == "agent" and room_id in _agent_frames:
+    if room_id in _agent_frames:
         return Response(content=_agent_frames[room_id], media_type="image/jpeg", headers={"Cache-Control": "no-store"})
+    if room_id in _recorder_cache:
+        return Response(content=_recorder_cache[room_id], media_type="image/jpeg", headers={"Cache-Control": "no-store"})
     data = render_mock_frame(room, tick=_tick)
     return Response(content=data, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
 
@@ -242,8 +294,10 @@ def room_mjpeg(room_id: str, _: None = Depends(require_admin)):
         local_tick = 0
         while True:
             local_tick += 1
-            if room.stream_mode == "agent" and room_id in _agent_frames:
+            if room_id in _agent_frames:
                 frame = _agent_frames[room_id]
+            elif room_id in _recorder_cache:
+                frame = _recorder_cache[room_id]
             else:
                 frame = render_mock_frame(room, tick=_tick + local_tick)
             yield b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + frame + b"\r\n"

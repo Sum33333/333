@@ -24,11 +24,17 @@ CAS_ENABLED = os.environ.get("CAS_ENABLED", "0") == "1"
 CAS_SERVICE_NAME = os.environ.get("CAS_SERVICE_NAME", PUBLIC_BASE_URL.rstrip("/"))
 
 # 番禺校区录播/集控平台 API（校内地址，由 NETC 教育技术部提供）
-RECORDER_API_URL = os.environ.get(
-    "RECORDER_API_URL",
-    "",  # 例: http://10.x.x.x/recorder/api 或校内域名
-)
+RECORDER_API_URL = os.environ.get("RECORDER_API_URL", "")
 CENTRAL_CONTROL_API_URL = os.environ.get("CENTRAL_CONTROL_API_URL", "")
+
+# 暨南大学 OpenAPI 平台 https://openapi.jnu.edu.cn
+OPENAPI_BASE_URL = os.environ.get("OPENAPI_BASE_URL", "https://openapi.jnu.edu.cn")
+OPENAPI_APP_KEY = os.environ.get("OPENAPI_APP_KEY", "")
+OPENAPI_ENABLED = os.environ.get("OPENAPI_ENABLED", "0") == "1"
+
+DEMO_MODE = os.environ.get("CLASSROOM_DEMO_MODE", "1") != "0"
+DEMO_AGENT_PUSH = os.environ.get("DEMO_AGENT_PUSH", "1") == "1"
+AGENT_TOKEN = os.environ.get("AGENT_TOKEN", "jnu-agent-demo")
 
 ORG_NAME = "暨南大学网络与教育技术中心"
 CAMPUS = "番禺校区"

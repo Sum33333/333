@@ -98,7 +98,10 @@ function filteredRooms() {
 
 function renderRoomList() {
   const list = filteredRooms();
-  $("roomList").innerHTML = list
+  const total = list.length;
+  $("roomList").innerHTML =
+    (total > 0 ? `<div class="list-meta">显示 ${total} / ${rooms.length} 间</div>` : "") +
+    list
     .map(
       (r) => `
     <div class="room-item ${r.id === selectedId ? "active" : ""}" data-id="${r.id}">
