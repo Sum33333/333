@@ -84,6 +84,13 @@ h1 { margin: 0; font-size: 18px; }
 .netc-link a { color: #7eb8ff; }
 .public-url-box { font-size: 13px; padding: 10px 12px; border-radius: 8px; background: rgba(61,220,132,.1); border: 1px solid rgba(61,220,132,.35); margin-bottom: 12px; }
 .public-url-box a { color: #3ddc84; word-break: break-all; }
+.device-mac-box { font-size: 13px; padding: 12px 14px; border-radius: 8px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.12); margin-bottom: 14px; }
+.device-mac-title { font-weight: 600; margin-bottom: 8px; color: #e8e8e8; }
+.device-mac-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.device-mac-label { color: var(--muted); font-size: 12px; }
+.device-mac-value { font-size: 15px; letter-spacing: 0.04em; color: #7ec8ff; background: rgba(0,0,0,.25); padding: 4px 10px; border-radius: 6px; }
+.device-mac-status { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: rgba(61,220,132,.15); color: var(--ok); border: 1px solid rgba(61,220,132,.35); }
+.device-mac-hint { margin: 8px 0 0; font-size: 11px; color: var(--muted); line-height: 1.45; }
 .btn.cas { width: 100%; margin-bottom: 12px; background: linear-gradient(135deg, #1a5fb4, #0d3d7a); border: none; }
 .divider { text-align: center; color: var(--muted); font-size: 12px; margin: 12px 0; }
 

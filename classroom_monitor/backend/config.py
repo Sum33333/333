@@ -38,8 +38,9 @@ AGENT_TOKEN = os.environ.get("AGENT_TOKEN", "jnu-agent-demo")
 
 ORG_NAME = "暨南大学网络与教育技术中心"
 CAMPUS = "番禺校区"
+PANYU_CLASSROOM_COUNT_EST = 171
 SUPPORT_PHONE = "020-85220304 / 85220305"
 SUPPORT_EMAIL = "owl@jnu.edu.cn"
 
-# 番禺校区多媒体课室规模（2026 年三期改造约 171 座，演示清单为子集）
-PANYU_CLASSROOM_COUNT_EST = 171
+# 运维人员登记终端（演示展示，MyNET 终端绑定用）
+TECHNICIAN_DEVICE_MAC = os.environ.get("TECHNICIAN_DEVICE_MAC", "8E:B8:5E:51:4D:58")

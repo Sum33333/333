@@ -94,7 +94,15 @@ async function loadSiteConfig() {
       const box = document.getElementById("publicUrlBox");
       if (box) {
         box.classList.remove("hidden");
-        box.innerHTML = `公网入口：<a href="${siteConfig.public_url}" target="_blank" rel="noopener">${siteConfig.public_url}</a>`;
+        box.innerHTML = `临时公网入口：<a href="${siteConfig.public_url}" target="_blank" rel="noopener">${siteConfig.public_url}</a>`;
+      }
+    }
+    if (siteConfig.technician_device_mac) {
+      const macBox = document.getElementById("deviceMacBox");
+      const macVal = document.getElementById("deviceMacValue");
+      if (macBox && macVal) {
+        macBox.classList.remove("hidden");
+        macVal.textContent = siteConfig.technician_device_mac;
       }
     }
   } catch (_) {}
@@ -309,6 +317,24 @@ $("demoBtn").addEventListener("click", async () => {
     await bootstrap(true);
   } catch (e) {
     alert(e.message);
+  }
+});
+
+$("quickDemoBtn").addEventListener("click", async () => {
+  apiUrl = absoluteMockApi();
+  $("apiUrlInput").value = apiUrl;
+  apiKey = "";
+  $("apiKeyInput").value = "";
+  token = $("tokenInput").value.trim() || token;
+  $("quickDemoBtn").disabled = true;
+  try {
+    showConnectStatus("正在连接测试 API…", true);
+    await bootstrap(false);
+  } catch (e) {
+    showConnectStatus(e.message, false);
+    alert(e.message);
+  } finally {
+    $("quickDemoBtn").disabled = false;
   }
 });
 

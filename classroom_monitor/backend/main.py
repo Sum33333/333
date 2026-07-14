@@ -34,6 +34,7 @@ from classroom_monitor.backend.config import (
     RECORDER_API_URL,
     SUPPORT_EMAIL,
     SUPPORT_PHONE,
+    TECHNICIAN_DEVICE_MAC,
 )
 from classroom_monitor.backend.api_connector import ConnectResult, UserApiSession, normalize_api_url, _guess_stream_paths
 from classroom_monitor.backend.cas_auth import cas_login_redirect_url, cas_logout_redirect_url, is_cas_enabled, validate_cas_ticket
@@ -264,6 +265,7 @@ def public_config():
         "demo_agent": DEMO_AGENT_PUSH,
         "mock_api_example": "/api/mock-platform",
         "default_token": "jnu-demo-admin",
+        "technician_device_mac": TECHNICIAN_DEVICE_MAC,
         "public_url": _public_access_url(),
     }
 
