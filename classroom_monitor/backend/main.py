@@ -264,6 +264,7 @@ def public_config():
         "rooms_loaded": len(_rooms),
         "demo_agent": DEMO_AGENT_PUSH,
         "mock_api_example": "/api/mock-platform",
+        "mock_api_note": "内置模拟 API，仅用于测试「输入地址→连接→看画面」流程，非学校真实录播/集控系统",
         "default_token": "jnu-demo-admin",
         "technician_device_mac": TECHNICIAN_DEVICE_MAC,
         "public_url": _public_access_url(),

@@ -14,14 +14,15 @@ from classroom_monitor.backend.rooms import PANYU_CLASSROOMS, Classroom
 
 router = APIRouter(prefix="/api/mock-platform", tags=["mock-platform"])
 
-# 取前 24 间作为模拟平台返回
-_MOCK_ROOMS: list[Classroom] = PANYU_CLASSROOMS[:24]
+# 完整 171 间番禺课室（与主站演示数据一致）
+_MOCK_ROOMS: list[Classroom] = list(PANYU_CLASSROOMS)
 _tick = 0
 
 
 def _room_dict(r: Classroom) -> dict:
     d = asdict(r)
-    d["name"] = f"{r.building} · {r.room}"
+    d["name"] = f"{r.building}{r.room}"
+    d["room_name"] = r.room
     d["stream_url"] = ""
     return d
 

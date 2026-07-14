@@ -54,8 +54,8 @@ def generate_panyu_classrooms(target: int = 171) -> list[Classroom]:
             for num in range(1, per_floor + 1):
                 if len(rooms) >= target:
                     return rooms[:target]
-                room_code = f"{prefix}{floor:02d}{num:02d}"
-                rid = f"py-{prefix.lower()}-{floor:02d}{num:02d}"
+                room_code = str(floor * 100 + num)
+                rid = f"py-{prefix.lower()}-{room_code}"
                 status = _seed_status(rid)
                 pc, proj, hdmi, mic, cpu = _status_flags(status)
                 seats = 60 + (hash(rid) % 140)

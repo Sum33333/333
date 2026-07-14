@@ -156,6 +156,10 @@ h1 { margin: 0; font-size: 18px; }
   width: 100%; max-width: 1100px; border-radius: var(--radius);
   border: 1px solid var(--border); background: #000; min-height: 280px;
 }
+.mock-api-note { font-size: 12px; color: #f0c674; background: rgba(240,198,116,.08); border: 1px solid rgba(240,198,116,.25); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; line-height: 1.5; }
+.mock-api-note.hidden { display: none; }
+.grid-card img, .stream-single img { object-fit: contain; min-height: 120px; background: #111; }
+.grid-card img.img-error, .stream-single img.img-error { outline: 2px dashed var(--bad); }
 .grid-view {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px;
 }

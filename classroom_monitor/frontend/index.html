@@ -43,10 +43,12 @@
         <p class="device-mac-hint">此 MAC 用于校园网终端绑定，与网站地址无关；正式环境在 MyNET 门户完成设备登记。</p>
       </div>
 
+      <p id="mockApiNote" class="mock-api-note hidden"></p>
+
       <label class="field-primary">
         API 地址 <span class="req">*</span>
         <input id="apiUrlInput" type="url" placeholder="http://录播平台内网地址/api" />
-        <span class="hint" id="apiHint">测试可用：<code id="mockApiExample">/api/mock-platform</code></span>
+        <span class="hint" id="apiHint">可选测试：<code id="mockApiExample">/api/mock-platform</code>（<strong>自建模拟 API</strong>，非学校真实系统）</span>
       </label>
 
       <label>
@@ -65,9 +67,10 @@
       <div id="connectStatus" class="connect-status hidden"></div>
 
       <div class="login-actions">
-        <button id="quickDemoBtn" class="btn primary">一键体验（测试 API + 实时画面）</button>
-        <button id="connectBtn" class="btn ghost">连接并进入</button>
-        <button id="demoBtn" class="btn ghost">跳过，使用演示数据</button>
+        <button id="quickDemoBtn" class="btn primary">进入演示（171 间番禺课室 + 模拟画面）</button>
+        <button id="mockApiBtn" class="btn ghost">测试模拟 API 连接</button>
+        <button id="connectBtn" class="btn ghost">连接真实 API 并进入</button>
+        <button id="demoBtn" class="btn ghost hidden">跳过，使用演示数据</button>
       </div>
 
       <p class="compliance">
@@ -146,6 +149,6 @@
     <span id="footerMeta">—</span>
   </footer>
 
-  <script src="/static/app.js?v=2"></script>
+  <script src="/static/app.js?v=3"></script>
 </body>
 </html>

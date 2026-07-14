@@ -176,14 +176,18 @@ def _parse_room_list(data: Any) -> list[dict[str, Any]]:
 
 def _map_room(item: dict[str, Any]) -> Classroom:
     rid = str(item.get("id") or item.get("room_id") or item.get("classroomId") or item.get("code") or "")
-    name = str(item.get("name") or item.get("room_name") or item.get("room") or rid)
     building = str(item.get("building") or item.get("buildingName") or item.get("building_name") or "教学楼")
+    room_code = str(item.get("room") or item.get("room_code") or item.get("roomNo") or "")
+    name = str(item.get("name") or item.get("room_name") or room_code or rid)
     if building == "教学楼" and " · " in name:
         building, name = name.split(" · ", 1)
     elif building == "教学楼" and "-" in name:
         parts = name.split("-", 1)
         if len(parts) == 2:
             building, name = parts[0], parts[1]
+    display_room = room_code or name
+    if display_room.startswith(building):
+        display_room = display_room[len(building) :].lstrip(" ·-")
 
     status_raw = str(item.get("status") or item.get("state") or "idle").lower()
     status_map = {
@@ -208,7 +212,7 @@ def _map_room(item: dict[str, Any]) -> Classroom:
     return Classroom(
         id=rid or f"room-{hash(name) % 10**8}",
         building=building,
-        room=name if name else rid,
+        room=display_room if display_room else rid,
         floor=int(item.get("floor") or 1),
         seats=int(item.get("seats") or item.get("capacity") or 80),
         devices=[d.strip() for d in str(item.get("devices", "PC,投影")).split(",") if d.strip()],

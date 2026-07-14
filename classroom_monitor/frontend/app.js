@@ -49,6 +49,18 @@ function absoluteMockApi() {
   return `${location.origin}/api/mock-platform`;
 }
 
+function bindStreamImage(img, roomId) {
+  if (!img) return;
+  img.addEventListener("error", () => {
+    img.classList.add("img-error");
+    img.alt = "画面加载失败，正在重试…";
+    setTimeout(() => {
+      img.src = frameUrl(roomId);
+    }, 1500);
+  });
+  img.addEventListener("load", () => img.classList.remove("img-error"));
+}
+
 function setConn(ok) {
   const el = $("connBadge");
   el.textContent = ok ? "实时连接" : "未连接";
@@ -104,6 +116,11 @@ async function loadSiteConfig() {
         macBox.classList.remove("hidden");
         macVal.textContent = siteConfig.technician_device_mac;
       }
+    }
+    const note = document.getElementById("mockApiNote");
+    if (note && siteConfig.mock_api_note) {
+      note.classList.remove("hidden");
+      note.textContent = siteConfig.mock_api_note;
     }
   } catch (_) {}
 }
@@ -182,8 +199,9 @@ function renderStream() {
     area.innerHTML = `
       <div class="stream-single">
         <img id="singleFrame" src="${frameUrl(selectedId)}" alt="${room?.building} ${room?.room}" />
-        <p class="stream-note">实时画面（约每秒刷新）· ${externalConnected ? "外部 API" : "本地演示"}</p>
+        <p class="stream-note">模拟实时画面（约每秒刷新）· ${externalConnected ? "已连接外部 API" : "本地演示数据"}</p>
       </div>`;
+    bindStreamImage(document.getElementById("singleFrame"), selectedId);
     return;
   }
 
@@ -191,11 +209,16 @@ function renderStream() {
     .map(
       (r) => `
       <div class="grid-card" data-id="${r.id}">
-        <img src="${frameUrl(r.id)}" alt="${r.room}" loading="lazy" />
+        <img src="${frameUrl(r.id)}" alt="${r.building} ${r.room}" loading="lazy" />
         <div class="cap"><span>${r.building} ${r.room}</span><span>${STATUS_LABEL[r.status]}</span></div>
       </div>`
     )
     .join("")}</div>`;
+
+  area.querySelectorAll(".grid-card img").forEach((img) => {
+    const id = img.closest(".grid-card")?.dataset.id;
+    if (id) bindStreamImage(img, id);
+  });
 
   area.querySelectorAll(".grid-card").forEach((el) => {
     el.addEventListener("click", () => {
@@ -321,20 +344,41 @@ $("demoBtn").addEventListener("click", async () => {
 });
 
 $("quickDemoBtn").addEventListener("click", async () => {
-  apiUrl = absoluteMockApi();
-  $("apiUrlInput").value = apiUrl;
+  apiUrl = "";
   apiKey = "";
-  $("apiKeyInput").value = "";
-  token = $("tokenInput").value.trim() || token;
+  localStorage.removeItem("cm_api_url");
+  token = $("tokenInput").value.trim() || token || "jnu-demo-admin";
+  $("tokenInput").value = token;
   $("quickDemoBtn").disabled = true;
   try {
-    showConnectStatus("正在连接测试 API…", true);
-    await bootstrap(false);
+    try {
+      await api("/api/disconnect", { method: "POST", body: JSON.stringify({}) });
+    } catch (_) {}
+    showConnectStatus("正在加载 171 间番禺课室演示画面…", true);
+    await bootstrap(true);
   } catch (e) {
     showConnectStatus(e.message, false);
     alert(e.message);
   } finally {
     $("quickDemoBtn").disabled = false;
+  }
+});
+
+$("mockApiBtn").addEventListener("click", async () => {
+  apiUrl = absoluteMockApi();
+  $("apiUrlInput").value = apiUrl;
+  apiKey = "";
+  $("apiKeyInput").value = "";
+  token = $("tokenInput").value.trim() || token;
+  $("mockApiBtn").disabled = true;
+  try {
+    showConnectStatus("正在连接内置模拟 API（非真实录播系统）…", true);
+    await bootstrap(false);
+  } catch (e) {
+    showConnectStatus(e.message, false);
+    alert(e.message);
+  } finally {
+    $("mockApiBtn").disabled = false;
   }
 });
 
