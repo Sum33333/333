@@ -10,14 +10,23 @@ from pathlib import Path
 
 from classroom_monitor.backend.rooms import Classroom, Status
 
-# 番禺校区主要教学楼（2026 三期改造覆盖范围）
+# 暨南大学番禺校区（广州大学城校区）主要教学楼
+# 参考：校区一期（教学大楼、学院楼B组团、实验楼D组团）及二期规划（A/E/F/S 组团）
+# 来源：panyu.jnu.edu.cn 南校区启用报道、番禺校区二期工程规划公示
 PANYU_BUILDINGS: list[tuple[str, str, int, int, list[str]]] = [
-    # (楼名, 编号前缀, 楼层数, 每层教室数, 设备)
-    ("南海楼", "NH", 5, 8, ["PC", "投影", "录播", "中控"]),
-    ("万国楼", "WG", 4, 7, ["PC", "投影", "录播"]),
-    ("理学楼", "LX", 4, 6, ["PC", "投影", "录播"]),
-    ("坪苑学园", "PY", 3, 5, ["PC", "投影"]),
-    ("实验楼", "SY", 3, 4, ["PC", "投影", "实验台"]),
+    # (楼名, 编号前缀, 楼层数, 每层教室数, 设备) — 合计约 171 间
+    ("教学大楼", "JX", 5, 5, ["PC", "投影", "录播", "中控", "自由课室"]),
+    ("A-1教学楼", "A1", 5, 4, ["PC", "投影", "录播", "中控"]),
+    ("A-2教研楼", "A2", 5, 3, ["PC", "投影", "录播"]),
+    ("学院楼B组团", "B", 5, 4, ["PC", "投影", "录播", "中控"]),
+    ("实验楼D组团", "D", 5, 3, ["PC", "投影", "录播", "实验台"]),
+    ("F-1实验楼", "F1", 4, 3, ["PC", "投影", "实验台"]),
+    ("F-2实验楼", "F2", 4, 3, ["PC", "投影", "实验台"]),
+    ("F-3实验楼", "F3", 4, 3, ["PC", "投影", "实验台"]),
+    ("暨伯学院楼", "JB", 5, 3, ["PC", "投影", "录播", "中控"]),
+    ("知识产权楼", "ZC", 4, 3, ["PC", "投影", "录播"]),
+    ("E-1实验楼", "E1", 3, 3, ["PC", "投影", "实验台"]),
+    ("E-2实验楼", "E2", 3, 3, ["PC", "投影", "实验台"]),
 ]
 
 STATUSES: list[Status] = ["in_use", "idle", "offline", "fault", "in_use", "idle"]
@@ -35,7 +44,6 @@ def _status_flags(status: Status) -> tuple[bool, bool, bool, bool, float]:
         return True, True, False, True, 45.0 + (hash("f") % 20)
     if status == "idle":
         return True, True, True, True, 8.0 + (hash("i") % 10)
-    # in_use
     return True, True, True, True, 20.0 + (hash("u") % 35)
 
 
@@ -45,9 +53,9 @@ def generate_panyu_classrooms(target: int = 171) -> list[Classroom]:
         for floor in range(1, floors + 1):
             for num in range(1, per_floor + 1):
                 if len(rooms) >= target:
-                    return rooms
-                room_code = f"{prefix}{floor}{num:02d}"
-                rid = f"py-{prefix.lower()}-{floor}{num:02d}"
+                    return rooms[:target]
+                room_code = f"{prefix}{floor:02d}{num:02d}"
+                rid = f"py-{prefix.lower()}-{floor:02d}{num:02d}"
                 status = _seed_status(rid)
                 pc, proj, hdmi, mic, cpu = _status_flags(status)
                 seats = 60 + (hash(rid) % 140)
@@ -77,15 +85,15 @@ def generate_panyu_classrooms(target: int = 171) -> list[Classroom]:
                 )
     extra = 1
     while len(rooms) < target:
-        rid = f"py-nh-x{extra:03d}"
+        rid = f"py-jx-x{extra:03d}"
         status = _seed_status(rid)
         pc, proj, hdmi, mic, cpu = _status_flags(status)
         rooms.append(
             Classroom(
                 id=rid,
-                building="南海楼",
-                room=f"NH-X{extra:02d}",
-                floor=5 + (extra // 10),
+                building="教学大楼",
+                room=f"JX-X{extra:02d}",
+                floor=6 + (extra // 8),
                 seats=80,
                 devices=["PC", "投影", "录播", "中控"],
                 status=status,

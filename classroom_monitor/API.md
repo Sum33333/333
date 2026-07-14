@@ -16,10 +16,10 @@ GET {api_url}/classrooms
 {
   "rooms": [
     {
-      "id": "py-nh-101",
-      "building": "南海楼",
-      "room": "NH101",
-      "name": "南海楼 · NH101",
+      "id": "py-jx-0101",
+      "building": "教学大楼",
+      "room": "JX0101",
+      "name": "教学大楼 · JX0101",
       "status": "in_use",
       "devices": "PC,投影,录播",
       "stream_url": "http://内网/optional/direct/preview.jpg"
