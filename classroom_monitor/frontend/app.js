@@ -90,6 +90,13 @@ async function loadSiteConfig() {
     $("apiUrlInput").value = apiUrl;
     $("apiKeyInput").value = apiKey;
     $("footerMeta").textContent = `${siteConfig.campus} · ${siteConfig.support_phone}`;
+    if (siteConfig.public_url) {
+      const box = document.getElementById("publicUrlBox");
+      if (box) {
+        box.classList.remove("hidden");
+        box.innerHTML = `公网入口：<a href="${siteConfig.public_url}" target="_blank" rel="noopener">${siteConfig.public_url}</a>`;
+      }
+    }
   } catch (_) {}
 }
 

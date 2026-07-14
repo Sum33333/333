@@ -13,6 +13,8 @@ from dataclasses import asdict
 from datetime import datetime
 from typing import Any
 
+from pathlib import Path
+
 from fastapi import Body, Depends, FastAPI, Header, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, Response, StreamingResponse
@@ -220,6 +222,30 @@ def health():
     }
 
 
+def _public_access_url() -> str | None:
+    for p in (
+        Path(os.environ.get("PUBLIC_URL_FILE", "/workspace/PUBLIC_URL.txt")),
+        Path(__file__).resolve().parents[2] / "PUBLIC_URL.txt",
+    ):
+        if p.is_file():
+            url = p.read_text(encoding="utf-8").strip()
+            if url.startswith("http"):
+                return url
+    return None
+
+
+@app.get("/api/access")
+def access_info():
+    """返回当前可访问地址（本机 + 公网隧道）。"""
+    port = int(os.environ.get("PORT", "8080"))
+    return {
+        "ok": True,
+        "local_url": f"http://127.0.0.1:{port}",
+        "public_url": _public_access_url(),
+        "health": "/api/health",
+    }
+
+
 @app.get("/api/config")
 def public_config():
     """前端初始化：NETC 门户链接、CAS 登录地址等。"""
@@ -238,6 +264,7 @@ def public_config():
         "demo_agent": DEMO_AGENT_PUSH,
         "mock_api_example": "/api/mock-platform",
         "default_token": "jnu-demo-admin",
+        "public_url": _public_access_url(),
     }
 
 
