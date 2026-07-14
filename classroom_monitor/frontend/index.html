@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>暨南大学 · 番禺校区教室监控</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">暨</div>
+      <div>
+        <h1>番禺校区教室设备监控</h1>
+        <p class="subtitle">校内运维后台 · 设备状态与画面预览</p>
+      </div>
+    </div>
+    <div class="top-actions">
+      <span id="demoBadge" class="badge demo">演示模式</span>
+      <span id="connBadge" class="badge offline">未连接</span>
+      <button id="refreshBtn" class="btn ghost">刷新</button>
+    </div>
+  </header>
+
+  <section id="loginPanel" class="login-panel">
+    <div class="login-card">
+      <h2>管理员登录</h2>
+      <p>请输入校内运维后台令牌。默认演示令牌：<code>jnu-demo-admin</code></p>
+      <label>
+        访问令牌
+        <input id="tokenInput" type="password" placeholder="Bearer token" value="jnu-demo-admin" />
+      </label>
+      <button id="loginBtn" class="btn primary">进入监控台</button>
+      <p class="compliance">
+        本系统仅供授权运维人员使用。接入真实教室画面前，须完成学校信息安全与隐私合规审批，
+        并在教室公示监控范围。禁止用于教学无关用途。
+      </p>
+    </div>
+  </section>
+
+  <main id="app" class="app hidden">
+    <aside class="sidebar">
+      <div class="summary" id="summaryCards"></div>
+      <div class="filters">
+        <label>教学楼
+          <select id="buildingFilter">
+            <option value="">全部</option>
+          </select>
+        </label>
+        <label>状态
+          <select id="statusFilter">
+            <option value="">全部</option>
+            <option value="in_use">使用中</option>
+            <option value="idle">待机</option>
+            <option value="offline">离线</option>
+            <option value="fault">故障</option>
+          </select>
+        </label>
+        <input id="searchInput" type="search" placeholder="搜索教室编号…" />
+      </div>
+      <div id="roomList" class="room-list"></div>
+    </aside>
+
+    <section class="main-pane">
+      <div id="emptyState" class="empty-state">
+        <h3>选择左侧教室查看实时画面</h3>
+        <p>支持网格总览与单教室 MJPEG 预览（演示数据模拟屏幕内容）</p>
+      </div>
+      <div id="detailPane" class="detail-pane hidden">
+        <div class="detail-header">
+          <div>
+            <h2 id="detailTitle">—</h2>
+            <p id="detailMeta" class="meta">—</p>
+          </div>
+          <div class="detail-actions">
+            <button id="gridViewBtn" class="btn ghost">网格总览</button>
+            <button id="singleViewBtn" class="btn primary">单画面</button>
+          </div>
+        </div>
+        <div id="deviceChips" class="chips"></div>
+        <div id="streamArea" class="stream-area"></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+  <span>暨南大学番禺校区 · 教室多媒体运维演示系统</span>
+  <span id="updatedAt">—</span>
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
