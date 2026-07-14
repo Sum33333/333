@@ -1,0 +1,152 @@
+:root {
+  --bg: #0f1219;
+  --panel: #171b24;
+  --panel-2: #1e2430;
+  --border: #2a3140;
+  --text: #e8ebf0;
+  --muted: #9aa3b2;
+  --accent: #c41e3a;
+  --accent-2: #8b1529;
+  --ok: #3ddc84;
+  --warn: #f5a623;
+  --bad: #ff6b6b;
+  --idle: #5b8cff;
+  --radius: 12px;
+  --shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); }
+
+.hidden { display: none !important; }
+
+.topbar {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 14px 20px; border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, #141925, #10141c);
+  position: sticky; top: 0; z-index: 10;
+}
+.brand { display: flex; gap: 14px; align-items: center; }
+.logo {
+  width: 44px; height: 44px; border-radius: 10px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  display: grid; place-items: center; font-weight: 800; font-size: 20px;
+}
+h1 { margin: 0; font-size: 18px; }
+.subtitle { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+.top-actions { display: flex; gap: 10px; align-items: center; }
+
+.badge {
+  padding: 6px 10px; border-radius: 999px; font-size: 12px; border: 1px solid var(--border);
+}
+.badge.demo { background: rgba(196, 30, 58, 0.15); color: #ffb4c0; border-color: rgba(196,30,58,.35); }
+.badge.online { background: rgba(61,220,132,.12); color: var(--ok); }
+.badge.offline { background: rgba(255,107,107,.1); color: var(--bad); }
+
+.btn {
+  border: 1px solid var(--border); background: var(--panel-2); color: var(--text);
+  padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 13px;
+}
+.btn:hover { filter: brightness(1.08); }
+.btn.primary { background: linear-gradient(135deg, var(--accent), var(--accent-2)); border-color: transparent; }
+.btn.ghost { background: transparent; }
+
+.login-panel {
+  min-height: calc(100vh - 120px);
+  display: grid; place-items: center; padding: 24px;
+}
+.login-card {
+  width: min(460px, 100%); background: var(--panel); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 28px; box-shadow: var(--shadow);
+}
+.login-card h2 { margin-top: 0; }
+.login-card label { display: block; margin: 16px 0; font-size: 13px; color: var(--muted); }
+.login-card input {
+  width: 100%; margin-top: 8px; padding: 10px 12px; border-radius: 8px;
+  border: 1px solid var(--border); background: #0c0f15; color: var(--text);
+}
+.compliance { font-size: 12px; color: var(--muted); line-height: 1.6; margin-top: 18px; }
+.netc-link { font-size: 13px; color: var(--muted); margin: 0 0 14px; }
+.netc-link a { color: #7eb8ff; }
+.btn.cas { width: 100%; margin-bottom: 12px; background: linear-gradient(135deg, #1a5fb4, #0d3d7a); border: none; }
+.divider { text-align: center; color: var(--muted); font-size: 12px; margin: 12px 0; }
+
+.app {
+  display: grid; grid-template-columns: 340px 1fr; min-height: calc(100vh - 110px);
+}
+
+.sidebar {
+  border-right: 1px solid var(--border); background: var(--panel);
+  padding: 16px; overflow: auto;
+}
+.summary {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px;
+}
+.summary .card {
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px;
+}
+.summary .num { font-size: 22px; font-weight: 700; }
+.summary .lbl { font-size: 12px; color: var(--muted); }
+
+.filters { display: grid; gap: 10px; margin-bottom: 12px; }
+.filters label { font-size: 12px; color: var(--muted); display: grid; gap: 6px; }
+.filters select, .filters input {
+  padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border);
+  background: #0c0f15; color: var(--text);
+}
+
+.room-list { display: grid; gap: 8px; }
+.room-item {
+  border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px;
+  background: #12161f; cursor: pointer; transition: .15s;
+}
+.room-item:hover, .room-item.active { border-color: rgba(196,30,58,.55); background: #171d28; }
+.room-item .row1 { display: flex; justify-content: space-between; align-items: center; }
+.room-item .name { font-weight: 600; }
+.status-dot {
+  width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px;
+}
+.status-in_use { background: var(--ok); }
+.status-idle { background: var(--idle); }
+.status-offline { background: #666; }
+.status-fault { background: var(--bad); }
+.room-item .row2 { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+.main-pane { padding: 16px 18px; overflow: auto; }
+.empty-state {
+  height: 100%; min-height: 420px; border: 1px dashed var(--border); border-radius: var(--radius);
+  display: grid; place-content: center; text-align: center; color: var(--muted);
+}
+.detail-header { display: flex; justify-content: space-between; gap: 12px; align-items: start; }
+.meta { color: var(--muted); font-size: 13px; margin: 6px 0 0; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
+.chip {
+  font-size: 12px; padding: 6px 10px; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--panel-2);
+}
+.chip.ok { color: var(--ok); }
+.chip.bad { color: var(--bad); }
+
+.stream-area { display: grid; gap: 14px; }
+.stream-single img, .stream-single .mjpeg {
+  width: 100%; max-width: 1100px; border-radius: var(--radius);
+  border: 1px solid var(--border); background: #000; min-height: 280px;
+}
+.grid-view {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px;
+}
+.grid-card {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
+}
+.grid-card img { width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block; background: #000; }
+.grid-card .cap { padding: 8px 10px; font-size: 12px; display: flex; justify-content: space-between; }
+
+.footer {
+  border-top: 1px solid var(--border); padding: 10px 20px; font-size: 12px; color: var(--muted);
+  display: flex; justify-content: space-between;
+}
+
+@media (max-width: 960px) {
+  .app { grid-template-columns: 1fr; }
+  .sidebar { max-height: 42vh; }
+}
