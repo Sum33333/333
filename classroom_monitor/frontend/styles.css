@@ -65,7 +65,21 @@ h1 { margin: 0; font-size: 18px; }
   width: 100%; margin-top: 8px; padding: 10px 12px; border-radius: 8px;
   border: 1px solid var(--border); background: #0c0f15; color: var(--text);
 }
-.compliance { font-size: 12px; color: var(--muted); line-height: 1.6; margin-top: 18px; }
+.login-card-wide { width: min(520px, 100%); }
+.field-primary input { border-color: rgba(196, 30, 58, 0.45); }
+.req { color: var(--accent); }
+.hint { font-size: 11px; color: var(--muted); margin-top: 6px; display: block; }
+.hint code { cursor: pointer; color: #7eb8ff; }
+.advanced { margin: 12px 0; font-size: 13px; color: var(--muted); }
+.advanced summary { cursor: pointer; margin-bottom: 8px; }
+.login-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+.connect-status { margin-top: 12px; padding: 10px 12px; border-radius: 8px; font-size: 13px; }
+.connect-status.ok { background: rgba(61,220,132,.12); color: var(--ok); border: 1px solid rgba(61,220,132,.3); }
+.connect-status.err { background: rgba(255,107,107,.1); color: var(--bad); border: 1px solid rgba(255,107,107,.3); }
+.api-banner { font-size: 11px; color: #7eb8ff; padding: 8px 10px; margin-bottom: 10px; border-radius: 8px; background: rgba(26,95,180,.15); border: 1px solid rgba(26,95,180,.3); word-break: break-all; }
+.api-dialog { border: none; border-radius: var(--radius); padding: 0; background: transparent; max-width: 480px; }
+.api-dialog::backdrop { background: rgba(0,0,0,.55); }
+.stream-note { font-size: 12px; color: var(--muted); margin-top: 8px; }
 .netc-link { font-size: 13px; color: var(--muted); margin: 0 0 14px; }
 .netc-link a { color: #7eb8ff; }
 .btn.cas { width: 100%; margin-bottom: 12px; background: linear-gradient(135deg, #1a5fb4, #0d3d7a); border: none; }

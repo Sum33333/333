@@ -5,58 +5,48 @@ const STATUS_LABEL = {
   fault: "故障",
 };
 
-let token = "";
+let token = localStorage.getItem("cm_token") || "jnu-demo-admin";
+let apiUrl = localStorage.getItem("cm_api_url") || "";
+let apiKey = localStorage.getItem("cm_api_key") || "";
 let rooms = [];
 let summary = {};
 let selectedId = null;
-let viewMode = "grid"; // grid | single
+let viewMode = "grid";
 let ws = null;
-
 let siteConfig = {};
+let externalConnected = false;
 
 const $ = (id) => document.getElementById(id);
 
-async function loadSiteConfig() {
-  try {
-    const res = await fetch("/api/config");
-    siteConfig = await res.json();
-    if (siteConfig.cas_enabled && siteConfig.cas_login_url) {
-      $("casLoginBtn").classList.remove("hidden");
-      $("loginDivider").classList.remove("hidden");
-      $("casLoginBtn").onclick = () => {
-        window.location.href = siteConfig.cas_login_url;
-      };
-    }
-    $("footerMeta").textContent = `${siteConfig.campus} · 服务热线 ${siteConfig.support_phone}`;
-    if (siteConfig.demo_mode) {
-      $("demoBadge").classList.remove("hidden");
-    } else {
-      $("demoBadge").classList.add("hidden");
-    }
-  } catch (_) {
-    /* ignore */
+function authHeaders(json = false) {
+  const h = { Authorization: `Bearer ${token}` };
+  if (json) h["Content-Type"] = "application/json";
+  return h;
+}
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, { ...opts, headers: { ...authHeaders(opts.body != null), ...opts.headers } });
+  if (!res.ok) {
+    let msg = await res.text();
+    try {
+      const j = JSON.parse(msg);
+      msg = j.detail || j.message || msg;
+    } catch (_) {}
+    throw new Error(msg);
   }
-}
-
-loadSiteConfig();
-
-function authHeaders() {
-  return { Authorization: `Bearer ${token}` };
-}
-
-async function api(path) {
-  const res = await fetch(path, { headers: authHeaders() });
-  if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
 
-function frameUrl(roomId, bust = true) {
-  const q = bust ? `?t=${Date.now()}` : "";
-  return `/api/rooms/${roomId}/frame.jpg${q}`;
+function frameUrl(roomId) {
+  return `/api/rooms/${roomId}/frame.jpg?t=${Date.now()}`;
 }
 
 function mjpegUrl(roomId) {
   return `/api/rooms/${roomId}/mjpeg?token=${encodeURIComponent(token)}`;
+}
+
+function absoluteMockApi() {
+  return `${location.origin}/api/mock-platform`;
 }
 
 function setConn(ok) {
@@ -64,6 +54,46 @@ function setConn(ok) {
   el.textContent = ok ? "实时连接" : "未连接";
   el.className = `badge ${ok ? "online" : "offline"}`;
 }
+
+function updateApiBadge() {
+  const el = $("apiBadge");
+  el.classList.remove("hidden");
+  if (externalConnected && apiUrl) {
+    el.textContent = "API 已连接";
+    el.className = "badge online";
+    $("apiBanner").classList.remove("hidden");
+    $("apiBanner").textContent = `已连接：${apiUrl}`;
+    $("demoBadge").classList.add("hidden");
+  } else {
+    el.textContent = "演示数据";
+    el.className = "badge demo";
+    $("apiBanner").classList.add("hidden");
+    if (siteConfig.demo_mode !== false) $("demoBadge").classList.remove("hidden");
+  }
+}
+
+function showConnectStatus(msg, ok) {
+  const el = $("connectStatus");
+  el.classList.remove("hidden", "ok", "err");
+  el.classList.add(ok ? "ok" : "err");
+  el.textContent = msg;
+}
+
+async function loadSiteConfig() {
+  try {
+    siteConfig = await fetch("/api/config").then((r) => r.json());
+    if (siteConfig.default_token) token = token || siteConfig.default_token;
+    $("tokenInput").value = token;
+    const mock = absoluteMockApi();
+    $("mockApiExample").textContent = mock;
+    if (!apiUrl) $("apiUrlInput").placeholder = mock;
+    $("apiUrlInput").value = apiUrl;
+    $("apiKeyInput").value = apiKey;
+    $("footerMeta").textContent = `${siteConfig.campus} · ${siteConfig.support_phone}`;
+  } catch (_) {}
+}
+
+loadSiteConfig();
 
 function renderSummary() {
   const cards = [
@@ -73,15 +103,14 @@ function renderSummary() {
     ["故障", summary.fault],
   ];
   $("summaryCards").innerHTML = cards
-    .map(
-      ([lbl, num]) => `
-      <div class="card"><div class="num">${num ?? "—"}</div><div class="lbl">${lbl}</div></div>`
-    )
+    .map(([lbl, num]) => `<div class="card"><div class="num">${num ?? "—"}</div><div class="lbl">${lbl}</div></div>`)
     .join("");
-  if ($("footerMeta") && (siteConfig.support_phone || summary.updated_at)) {
-    $("footerMeta").textContent = `${summary.campus || siteConfig.campus || "番禺校区"} · 课室约 ${summary.classroom_capacity_est || siteConfig.classroom_capacity_est || "—"} 间 · 更新 ${summary.updated_at || "—"}`;
+  if ($("footerMeta")) {
+    const src = summary.external_api ? `API: ${summary.external_api}` : "演示模式";
+    $("footerMeta").textContent = `${summary.campus || "番禺校区"} · ${src} · ${summary.updated_at || ""}`;
   }
-  $("demoBadge").classList.toggle("hidden", !summary.demo_mode);
+  externalConnected = !!summary.external_mode;
+  updateApiBadge();
 }
 
 function filteredRooms() {
@@ -98,22 +127,20 @@ function filteredRooms() {
 
 function renderRoomList() {
   const list = filteredRooms();
-  const total = list.length;
   $("roomList").innerHTML =
-    (total > 0 ? `<div class="list-meta">显示 ${total} / ${rooms.length} 间</div>` : "") +
+    (list.length ? `<div class="list-meta">显示 ${list.length} / ${rooms.length} 间</div>` : `<div class="list-meta">暂无教室</div>`) +
     list
-    .map(
-      (r) => `
+      .map(
+        (r) => `
     <div class="room-item ${r.id === selectedId ? "active" : ""}" data-id="${r.id}">
       <div class="row1">
         <span class="name">${r.building} · ${r.room}</span>
         <span><span class="status-dot status-${r.status}"></span>${STATUS_LABEL[r.status] || r.status}</span>
       </div>
-      <div class="row2">CPU ${r.cpu_pct}% · ${r.devices.join(" / ")}${r.note ? " · " + r.note : ""}</div>
+      <div class="row2">${(r.devices || []).join(" / ")}${r.note ? " · " + r.note : ""}</div>
     </div>`
-    )
-    .join("");
-
+      )
+      .join("");
   document.querySelectorAll(".room-item").forEach((el) => {
     el.addEventListener("click", () => selectRoom(el.dataset.id));
   });
@@ -127,9 +154,7 @@ function renderChips(room) {
     ["麦克风", room.mic_ok],
   ];
   $("deviceChips").innerHTML = chips
-    .map(
-      ([name, ok]) => `<span class="chip ${ok ? "ok" : "bad"}">${name}: ${ok ? "正常" : "异常"}</span>`
-    )
+    .map(([name, ok]) => `<span class="chip ${ok ? "ok" : "bad"}">${name}: ${ok ? "正常" : "异常"}</span>`)
     .join("");
 }
 
@@ -141,7 +166,8 @@ function renderStream() {
     const room = rooms.find((r) => r.id === selectedId);
     area.innerHTML = `
       <div class="stream-single">
-        <img src="${mjpegUrl(selectedId)}" alt="${room.building} ${room.room}" />
+        <img src="${mjpegUrl(selectedId)}" alt="${room?.building} ${room?.room}" />
+        <p class="stream-note">MJPEG 实时流 · ${externalConnected ? "外部 API" : "本地演示"}</p>
       </div>`;
     return;
   }
@@ -172,7 +198,7 @@ function selectRoom(id) {
   $("emptyState").classList.add("hidden");
   $("detailPane").classList.remove("hidden");
   $("detailTitle").textContent = `${room.building} · ${room.room}`;
-  $("detailMeta").textContent = `座位 ${room.seats} · ${room.devices.join(" / ")} · 最后上报 ${room.last_seen || "—"}`;
+  $("detailMeta").textContent = `座位 ${room.seats} · ${(room.devices || []).join(" / ")}`;
   renderChips(room);
   renderRoomList();
   renderStream();
@@ -195,15 +221,43 @@ function connectWs() {
     if (msg.summary) summary = msg.summary;
     if (msg.rooms) rooms = msg.rooms;
     renderSummary();
+    populateBuildings();
     renderRoomList();
     if (selectedId && viewMode === "single") renderStream();
     if (viewMode === "grid") renderStream();
   };
 }
 
-async function bootstrap() {
+async function connectExternalApi(url, key) {
+  const result = await api("/api/connect", {
+    method: "POST",
+    body: JSON.stringify({ api_url: url, api_key: key || "" }),
+  });
+  apiUrl = url;
+  apiKey = key || "";
+  localStorage.setItem("cm_api_url", apiUrl);
+  localStorage.setItem("cm_api_key", apiKey);
+  externalConnected = true;
+  return result;
+}
+
+async function bootstrap(useDemoOnly = false) {
+  token = $("tokenInput").value.trim() || token;
+  localStorage.setItem("cm_token", token);
+
+  if (!useDemoOnly && apiUrl) {
+    try {
+      const r = await connectExternalApi(apiUrl, apiKey);
+      showConnectStatus(r.message, true);
+    } catch (e) {
+      throw new Error("API 连接失败：" + e.message);
+    }
+  } else if (!useDemoOnly) {
+  }
+
   summary = await api("/api/summary");
   rooms = await api("/api/rooms");
+  externalConnected = !!summary.external_mode;
   populateBuildings();
   renderSummary();
   renderRoomList();
@@ -211,28 +265,94 @@ async function bootstrap() {
   viewMode = "grid";
   $("emptyState").classList.add("hidden");
   $("detailPane").classList.remove("hidden");
-  $("detailTitle").textContent = "网格总览";
-  $("detailMeta").textContent = "点击任意教室进入单画面 MJPEG 预览";
+  $("detailTitle").textContent = externalConnected ? "已连接 · 网格总览" : "演示模式 · 网格总览";
+  $("detailMeta").textContent = "点击教室查看 MJPEG 实时画面";
   $("deviceChips").innerHTML = "";
   renderStream();
+  $("loginPanel").classList.add("hidden");
+  $("app").classList.remove("hidden");
+  $("refreshBtn").classList.remove("hidden");
+  $("apiSettingsBtn").classList.remove("hidden");
 }
 
-$("loginBtn").addEventListener("click", async () => {
-  token = $("tokenInput").value.trim();
-  if (!token) return alert("请输入令牌");
+$("connectBtn").addEventListener("click", async () => {
+  apiUrl = $("apiUrlInput").value.trim();
+  apiKey = $("apiKeyInput").value.trim();
+  if (!apiUrl) {
+    showConnectStatus("请填写 API 地址", false);
+    return;
+  }
+  token = $("tokenInput").value.trim() || token;
+  $("connectBtn").disabled = true;
   try {
-    await bootstrap();
-    $("loginPanel").classList.add("hidden");
-    $("app").classList.remove("hidden");
+    await bootstrap(false);
   } catch (e) {
-    alert("登录失败：" + e.message);
+    showConnectStatus(e.message, false);
+    alert(e.message);
+  } finally {
+    $("connectBtn").disabled = false;
+  }
+});
+
+$("demoBtn").addEventListener("click", async () => {
+  apiUrl = "";
+  localStorage.removeItem("cm_api_url");
+  token = $("tokenInput").value.trim() || token;
+  try {
+    await bootstrap(true);
+  } catch (e) {
+    alert(e.message);
   }
 });
 
 $("refreshBtn").addEventListener("click", async () => {
-  if (!token) return;
   try {
-    await bootstrap();
+    summary = await api("/api/summary");
+    rooms = await api("/api/rooms");
+    renderSummary();
+    renderRoomList();
+    if (viewMode === "grid") renderStream();
+  } catch (e) {
+    alert(e.message);
+  }
+});
+
+$("apiSettingsBtn").addEventListener("click", () => {
+  $("apiUrlDialog").value = apiUrl;
+  $("apiKeyDialog").value = apiKey;
+  $("apiDialog").showModal();
+});
+
+$("apiDialogConnect").addEventListener("click", async () => {
+  apiUrl = $("apiUrlDialog").value.trim();
+  apiKey = $("apiKeyDialog").value.trim();
+  if (!apiUrl) return alert("请填写 API 地址");
+  try {
+    await connectExternalApi(apiUrl, apiKey);
+    summary = await api("/api/summary");
+    rooms = await api("/api/rooms");
+    populateBuildings();
+    renderSummary();
+    renderRoomList();
+    renderStream();
+    $("apiDialog").close();
+  } catch (e) {
+    alert(e.message);
+  }
+});
+
+$("apiDialogDisconnect").addEventListener("click", async () => {
+  try {
+    await api("/api/disconnect", { method: "POST", body: JSON.stringify({}) });
+    apiUrl = "";
+    localStorage.removeItem("cm_api_url");
+    summary = await api("/api/summary");
+    rooms = await api("/api/rooms");
+    populateBuildings();
+    renderSummary();
+    renderRoomList();
+    renderStream();
+    $("apiDialog").close();
   } catch (e) {
     alert(e.message);
   }
@@ -255,7 +375,6 @@ $("singleViewBtn").addEventListener("click", () => {
   if (selectedId) selectRoom(selectedId);
 });
 
-// Auto-refresh grid snapshots
 setInterval(() => {
   if (!token || viewMode !== "grid") return;
   document.querySelectorAll(".grid-card img").forEach((img) => {
@@ -263,3 +382,8 @@ setInterval(() => {
     if (id) img.src = frameUrl(id);
   });
 }, 3000);
+
+// 一键填入测试 API
+$("mockApiExample").addEventListener("click", () => {
+  $("apiUrlInput").value = absoluteMockApi();
+});

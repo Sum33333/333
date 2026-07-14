@@ -13,7 +13,7 @@ from dataclasses import asdict
 from datetime import datetime
 from typing import Any
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
+from fastapi import Body, Depends, FastAPI, Header, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -33,17 +33,23 @@ from classroom_monitor.backend.config import (
     SUPPORT_EMAIL,
     SUPPORT_PHONE,
 )
+from classroom_monitor.backend.api_connector import ConnectResult, UserApiSession, normalize_api_url, _guess_stream_paths
 from classroom_monitor.backend.cas_auth import cas_login_redirect_url, cas_logout_redirect_url, is_cas_enabled, validate_cas_ticket
 from classroom_monitor.backend.demo_agent import demo_agent_loop
 from classroom_monitor.backend.mock_stream import jitter_status, render_mock_frame
 from classroom_monitor.backend.platform_sync import PlatformClient, merge_platform_status
+from classroom_monitor.backend.mock_platform import router as mock_platform_router
+
 from classroom_monitor.backend.rooms import PANYU_CLASSROOMS, Classroom
 
 ADMIN_TOKEN = os.environ.get("CLASSROOM_ADMIN_TOKEN", "jnu-demo-admin")
-
-_rooms: dict[str, Classroom] = {r.id: r for r in PANYU_CLASSROOMS}
-_rng = random.Random(7)
+_DEMO_ROOMS: dict[str, Classroom] = {r.id: r for r in PANYU_CLASSROOMS}
+_rooms: dict[str, Classroom] = dict(_DEMO_ROOMS)
+_external_mode = False
+_user_api: UserApiSession | None = None
+_user_api_meta: ConnectResult | None = None
 _tick = 0
+_rng = random.Random(7)
 _ws_clients: set[WebSocket] = set()
 
 
@@ -63,8 +69,10 @@ def _snapshot() -> dict[str, Any]:
         "in_use": in_use,
         "fault": fault,
         "idle": online - in_use - fault,
-        "demo_mode": DEMO_MODE,
-        "platform_live": _platform.live,
+        "demo_mode": DEMO_MODE and not _external_mode,
+        "external_mode": _external_mode,
+        "external_api": _user_api.base_url if _user_api else None,
+        "platform_live": _platform.live or _external_mode,
         "agent_frames": len(_agent_frames),
         "demo_agent": DEMO_AGENT_PUSH,
     }
@@ -86,10 +94,41 @@ async def _telemetry_loop() -> None:
     global _tick
     while True:
         _tick += 1
-        for rid, room in list(_rooms.items()):
-            _rooms[rid] = jitter_status(room, _rng)
+        if _external_mode and _user_api:
+            await _sync_user_api_once()
+        else:
+            for rid, room in list(_rooms.items()):
+                _rooms[rid] = jitter_status(room, _rng)
         await _broadcast({"type": "telemetry", "summary": _snapshot(), "rooms": [asdict(r) for r in _rooms.values()]})
         await asyncio.sleep(2.0)
+
+
+async def _sync_user_api_once() -> None:
+    if not _user_api:
+        return
+    result = await _user_api.test_and_load()
+    if result.ok and result.rooms:
+        for r in result.rooms:
+            _rooms[r.id] = r
+        for rid in list(_agent_frames.keys()):
+            if rid not in _rooms:
+                del _agent_frames[rid]
+    for rid, room in list(_rooms.items()):
+        if room.status in ("in_use", "idle", "online"):
+            snap = await _user_api.fetch_snapshot(rid, room)
+            if snap:
+                _agent_frames[rid] = snap
+
+
+async def _user_api_poll_loop() -> None:
+    while True:
+        if _external_mode and _user_api:
+            for rid, room in list(_rooms.items()):
+                if room.status in ("in_use", "idle") or _external_mode:
+                    snap = await _user_api.fetch_snapshot(rid, room)
+                    if snap:
+                        _agent_frames[rid] = snap
+        await asyncio.sleep(1.0)
 
 
 _agent_frames: dict[str, bytes] = {}
@@ -122,10 +161,10 @@ async def _platform_sync_loop() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    tasks = [asyncio.create_task(_telemetry_loop())]
-    if _platform.live:
+    tasks = [asyncio.create_task(_telemetry_loop()), asyncio.create_task(_user_api_poll_loop())]
+    if _platform.live and not _external_mode:
         tasks.append(asyncio.create_task(_platform_sync_loop()))
-    if DEMO_AGENT_PUSH:
+    if DEMO_AGENT_PUSH and not _external_mode:
         tasks.append(
             asyncio.create_task(
                 demo_agent_loop(_rooms, _agent_frames, lambda: _tick, interval=1.0, max_rooms=50)
@@ -143,10 +182,12 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="暨南大学番禺校区教室监控",
-    description="校内运维演示系统 — 默认模拟数据，需部署 Agent 接入真实画面",
-    version="0.1.0",
+    description="输入 API 地址连接录播/集控平台，选择教室查看实时画面",
+    version="0.2.0",
     lifespan=lifespan,
 )
+
+app.include_router(mock_platform_router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -195,6 +236,8 @@ def public_config():
         "classroom_capacity_est": PANYU_CLASSROOM_COUNT_EST,
         "rooms_loaded": len(_rooms),
         "demo_agent": DEMO_AGENT_PUSH,
+        "mock_api_example": "/api/mock-platform",
+        "default_token": "jnu-demo-admin",
     }
 
 
@@ -215,6 +258,71 @@ def cas_callback(ticket: str = Query(...), service: str | None = None):
 @app.get("/api/auth/cas/logout")
 def cas_logout():
     return {"logout_url": cas_logout_redirect_url()}
+
+
+@app.get("/api/connect/status")
+def connect_status(_: None = Depends(require_admin)):
+    return {
+        "connected": _external_mode,
+        "api_url": _user_api.base_url if _user_api else None,
+        "rooms_path": _user_api.rooms_path if _user_api else None,
+        "room_count": len(_rooms),
+        "message": _user_api_meta.message if _user_api_meta else "未连接外部 API（演示数据）",
+    }
+
+
+@app.post("/api/connect")
+async def connect_api(
+    payload: dict = Body(...),
+    _: None = Depends(require_admin),
+):
+    """连接用户输入的录播/集控 API，加载教室列表。"""
+    global _external_mode, _user_api, _user_api_meta, _rooms
+
+    api_url = normalize_api_url(str(payload.get("api_url", "")))
+    api_key = str(payload.get("api_key") or "").strip()
+    session = UserApiSession(base_url=api_url, api_key=api_key)
+    result = await session.test_and_load()
+    if not result.ok:
+        raise HTTPException(400, result.message)
+
+    _user_api = session
+    _user_api_meta = result
+    _external_mode = True
+    _rooms = {r.id: r for r in result.rooms}
+    _agent_frames.clear()
+    session.rooms_path = result.rooms_path
+    snap_tpl, mjpeg_tpl = _guess_stream_paths(api_url, result.rooms_path)
+    session.snapshot_template = snap_tpl
+    session.mjpeg_template = mjpeg_tpl
+
+    for r in result.rooms:
+        snap = await session.fetch_snapshot(r.id, r)
+        if snap:
+            _agent_frames[r.id] = snap
+
+    await _broadcast({"type": "api_connected", "summary": _snapshot(), "rooms": [asdict(r) for r in _rooms.values()]})
+    return {
+        "ok": True,
+        "api_url": api_url,
+        "room_count": len(_rooms),
+        "message": result.message,
+        "rooms_path": result.rooms_path,
+    }
+
+
+@app.post("/api/disconnect")
+async def disconnect_api(_: None = Depends(require_admin)):
+    """断开外部 API，恢复演示数据。"""
+    global _external_mode, _user_api, _user_api_meta, _rooms
+
+    _external_mode = False
+    _user_api = None
+    _user_api_meta = None
+    _rooms = dict(_DEMO_ROOMS)
+    _agent_frames.clear()
+    await _broadcast({"type": "api_disconnected", "summary": _snapshot(), "rooms": [asdict(r) for r in _rooms.values()]})
+    return {"ok": True, "message": "已恢复演示模式", "room_count": len(_rooms)}
 
 
 @app.get("/api/summary")
@@ -272,7 +380,7 @@ async def agent_push_frame(
 
 
 @app.get("/api/rooms/{room_id}/frame.jpg")
-def room_frame(room_id: str, _: None = Depends(require_admin)):
+async def room_frame(room_id: str, _: None = Depends(require_admin)):
     room = _rooms.get(room_id)
     if not room:
         raise HTTPException(404, "教室不存在")
@@ -280,15 +388,27 @@ def room_frame(room_id: str, _: None = Depends(require_admin)):
         return Response(content=_agent_frames[room_id], media_type="image/jpeg", headers={"Cache-Control": "no-store"})
     if room_id in _recorder_cache:
         return Response(content=_recorder_cache[room_id], media_type="image/jpeg", headers={"Cache-Control": "no-store"})
+    if _external_mode and _user_api:
+        snap = await _user_api.fetch_snapshot(room_id, room)
+        if snap:
+            _agent_frames[room_id] = snap
+            return Response(content=snap, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
     data = render_mock_frame(room, tick=_tick)
     return Response(content=data, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/rooms/{room_id}/mjpeg")
-def room_mjpeg(room_id: str, _: None = Depends(require_admin)):
+async def room_mjpeg(room_id: str, _: None = Depends(require_admin)):
     room = _rooms.get(room_id)
     if not room:
         raise HTTPException(404, "教室不存在")
+
+    if _external_mode and _user_api:
+        async def proxy_gen():
+            async for chunk in _user_api.iter_mjpeg(room_id, room):
+                yield chunk
+
+        return StreamingResponse(proxy_gen(), media_type="multipart/x-mixed-replace; boundary=frame")
 
     async def gen():
         local_tick = 0
