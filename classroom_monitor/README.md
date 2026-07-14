@@ -1,34 +1,25 @@
-# 暨南大学番禺校区教室监控（NETC 运维后台）
+# 暨南大学番禺校区教室监控
 
-> 主管部门：[网络与教育技术中心](https://netc.jnu.edu.cn/)  
-> `netc.jnu.edu.cn` 是中心门户，**不是**画面流地址。监控站建议部署为 `classroom.netc.jnu.edu.cn`（需向 NETC 申请）。
+## 永久网站（校内正式部署）
 
-## 快速启动（演示）
+**临时 cloudflared 链接会失效，不是永久站。**
+
+| 你要的 | 做法 |
+|--------|------|
+| 永久网址 | `https://classroom.netc.jnu.edu.cn`（向 NETC 申请 DNS） |
+| 设备 MAC `8E:B8:5E:51:4D:58` | MyNET 终端登记（运维电脑连校园 WiFi），**不是网站地址** |
+
+步骤：
+
+1. 提交 NETC 申请 → [NETC_APPLICATION_TEMPLATE.md](deploy/NETC_APPLICATION_TEMPLATE.md)
+2. 校内服务器安装 → `sudo deploy/install_permanent.sh`
+3. 详见 [PERMANENT_DEPLOY.md](deploy/PERMANENT_DEPLOY.md)
+
+## 本地演示（临时）
 
 ```bash
 ./start_classroom_monitor.sh
 # http://127.0.0.1:8080  令牌: jnu-demo-admin
 ```
 
-## 校内正式部署
-
-详见 [DEPLOY_NETC.md](DEPLOY_NETC.md) — CAS（MyNET）、录播平台 API、Agent 上报。
-
-## 功能
-
-- 番禺校区课室设备状态与画面预览（演示为模拟）
-- 网格总览 + MJPEG 单画面
-- WebSocket 实时推送
-- JNUID / CAS 登录预留（`CAS_ENABLED=1`）
-- 教室 Agent 模板
-
-## API
-
-| 接口 | 说明 |
-|------|------|
-| `GET /api/config` | NETC 门户、CAS 地址、服务热线 |
-| `GET /api/summary` | 汇总（需令牌） |
-| `GET /api/rooms/{id}/mjpeg` | 画面流 |
-| `GET /api/auth/cas/callback` | CAS 回调 |
-
-所有受保护 API 需 `Authorization: Bearer <token>`。
+网站内输入录播 API 即可选教室看画面，接口规范见 [API.md](API.md)
