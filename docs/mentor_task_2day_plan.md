@@ -31,6 +31,8 @@
 
 ## Day 1（今天）：对齐接口 + 本地跑通骨架
 
+> **完成状态：✅ 已完成（见 `docs/day1_completed_report.md`）**
+
 ### 上午（约 2–3 小时）— 找旧接口
 
 在 Jetson / 实验室电脑上找这些文件（按优先级）：
@@ -66,8 +68,8 @@ python3 integration/smoke_test.py
 **Day 1 完成标准：**
 
 - [ ] 能指出旧接口在哪（文件名 + 类名）
-- [ ] 能说清输入/输出字段
-- [ ] `smoke_test.py` 本地跑通
+- [x] 能说清输入/输出字段
+- [x] `smoke_test.py` 本地跑通
 
 ---
 
