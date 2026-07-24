@@ -70,6 +70,31 @@ ln -s /home/sribd/333/integration/mmdet_adapter_server.py /home/sribd/111/detect
 - 实际实现：软链到 `mmdet_adapter_server.py`
 - stdout JSON 仍为：`ready` / `ok` + `detections[{x1,y1,x2,y2,label,score}]`
 
+## 分割端真实拉起检测子进程（补充验证）
+
+分割脚本写死了路径，已用软链接对齐（不改业务逻辑）：
+
+| 写死路径 | 实际指向 |
+|----------|----------|
+| `~/For_torch_installation/.sglang/bin/{activate,python}` | `usrp_dev` |
+| `~/jetson/detection_server.py` | `333/integration/mmdet_adapter_server.py` |
+| `~/jetson/outputs/training/.../best_model.pth` | `/home/sribd/111/epoch_100.pth` |
+
+`--headless` 实测输出：
+
+```text
+[SEG] Starting detection subprocess...
+[SEG] detector ready, load_time=0.171s, classes=2
+[SEG] mode=real-detector
+[WF-headless] started
+...
+[WF-headless] stats recv=0 ...
+```
+
+说明：`DetectionClient` 已成功启动适配器并收到 `ready`。`recv=0` 是因为本机没有 STFT 发布端（`tcp://127.0.0.1:5560`），有数据流后才会出 window/检测框。
+
+有 GUI 时若报 Qt `xcb`，继续用 `--headless`，或补齐系统 Qt 插件后再开界面。
+
 ## 给导师的一句话汇报
 
-Jetson aarch64 上 mmcv CUDA 编译失败；已用基础库 mock 适配器替换 `detection_server.py`，`smoke_test` 与 `ready` JSON 验证通过；分割端通过 `run_segmentation_mock.sh` 指向 `usrp_dev` 即可联调。后续若拿到可用 mmcv/预编译包，再把 `backend_mode` 从 mock 切到真模型。
+Jetson aarch64 上 mmcv CUDA 编译失败；已用基础库 mock 适配器替换 `detection_server.py`，`smoke_test` 与分割端 `detector ready` 验证通过（软链接对齐写死路径到 `usrp_dev`/`~/jetson`）。缺 STFT 源时 `recv=0` 属预期。后续有预编译 mmcv 再切真模型。
