@@ -95,6 +95,7 @@ ln -s /home/sribd/333/integration/mmdet_adapter_server.py /home/sribd/111/detect
 
 有 GUI 时若报 Qt `xcb`，继续用 `--headless`，或补齐系统 Qt 插件后再开界面。
 
-## 给导师的一句话汇报
+## 给导师的一句话汇报（已过时，见 day2_mmdet_real_success.md）
 
-Jetson aarch64 上 mmcv CUDA 编译失败；已用基础库 mock 适配器替换 `detection_server.py`，`smoke_test` 与分割端 `detector ready` 验证通过（软链接对齐写死路径到 `usrp_dev`/`~/jetson`）。缺 STFT 源时 `recv=0` 属预期。后续有预编译 mmcv 再切真模型。
+> 2026-07-24 兜底阶段：mmcv 编译失败时用 mock 联通协议。  
+> **2026-07-30 已用 conda CUDA 编过 mmcv，切到真实 mmdet**，详见 `docs/day2_mmdet_real_success.md`。
