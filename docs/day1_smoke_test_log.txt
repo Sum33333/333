@@ -1,0 +1,5 @@
+[smoke] adapter: /workspace/integration/mmdet_adapter_server.py
+[smoke] starting: /usr/bin/python3 /workspace/integration/mmdet_adapter_server.py --weights  --model smoke_model --threshold 0.1 --imgsz 672 --device cpu --force-mock
+[smoke] ready: {'status': 'ready', 'load_time': 0.209, 'num_classes': 2, 'backend_mode': 'mock', 'model': 'smoke_model', 'device': 'cpu', 'init_note': 'force-mock enabled'}
+[smoke] infer: {'status': 'ok', 'detections': [{'x1': 15, 'y1': 23, 'x2': 53, 'y2': 61, 'label': 'signal', 'score': 0.86}, {'x1': 74, 'y1': 66, 'x2': 112, 'y2': 104, 'label': 'burst', 'score': 0.71}], 'backend_mode': 'mock'}
+SMOKE TEST PASSED
