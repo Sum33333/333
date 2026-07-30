@@ -51,6 +51,17 @@ def emit(obj: dict[str, Any]) -> None:
     sys.stdout.flush()
 
 
+class _StdoutToStderr:
+    """Redirect non-JSON prints/logs away from DetectionClient's stdout parser."""
+
+    def __enter__(self) -> None:
+        self._old = sys.stdout
+        sys.stdout = sys.stderr
+
+    def __exit__(self, *args: Any) -> None:
+        sys.stdout = self._old
+
+
 def try_import_mmdet() -> tuple[bool, str]:
     try:
         import mmcv  # noqa: F401
@@ -174,13 +185,16 @@ class DetectorBackend:
         from mmdet.apis import init_detector
 
         weights = os.path.expanduser(self.args.weights)
-        return init_detector(config_path, weights, device=self.args.device)
+        # init_detector / mmengine log to stdout by default; keep stdout JSON-only.
+        with _StdoutToStderr():
+            return init_detector(config_path, weights, device=self.args.device)
 
     def run_mmdet_infer(self, image_path: str) -> list[dict[str, Any]]:
         """Run real model and convert output to old detections schema."""
         from mmdet.apis import inference_detector
 
-        result = inference_detector(self._model, image_path)
+        with _StdoutToStderr():
+            result = inference_detector(self._model, image_path)
         return _det_to_dicts(result, self.args.threshold, self._class_names)
 
     def run_mock_infer(self, image_path: str) -> list[dict[str, Any]]:
