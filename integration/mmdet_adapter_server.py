@@ -6,10 +6,8 @@ Usage (same CLI as old detection_server.py):
   python mmdet_adapter_server.py --weights ... --model ... --threshold 0.1 --imgsz 672 --device cuda:0
 
 Priority:
-1) If mmdet + mmengine available and weights exist -> try real mmdet path
+1) If mmdet + mmcv + config + weights available -> real mmdet path
 2) Else fall back to lightweight mock detections (基础库/联调路径)
-
-You only need to fill `run_mmdet_infer()` when the real model is ready.
 """
 
 from __future__ import annotations
@@ -19,7 +17,13 @@ import json
 import os
 import sys
 import time
+from pathlib import Path
 from typing import Any, Optional
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_CONFIG = (
+    REPO_ROOT / "mmdet_configs" / "my_iq_project" / "my_fasterrcnn_binary_swin_t_iq.py"
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -32,7 +36,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--config",
         default="",
-        help="Optional mmdet config .py path (if your new model needs it)",
+        help="mmdet config .py path (default: repo mmdet_configs/.../my_fasterrcnn_binary_swin_t_iq.py)",
     )
     parser.add_argument(
         "--force-mock",
@@ -49,12 +53,79 @@ def emit(obj: dict[str, Any]) -> None:
 
 def try_import_mmdet() -> tuple[bool, str]:
     try:
+        import mmcv  # noqa: F401
         import mmengine  # noqa: F401
         import mmdet  # noqa: F401
+        from mmcv.ops import roi_align  # noqa: F401
 
-        return True, f"mmengine+mmdet import ok"
+        return True, "mmcv+mmengine+mmdet import ok"
     except Exception as exc:  # noqa: BLE001
-        return False, f"mmdet/mmengine unavailable: {exc}"
+        return False, f"mmdet/mmcv unavailable: {exc}"
+
+
+def _patch_torch_load_for_mmengine() -> None:
+    """PyTorch>=2.6 defaults weights_only=True; mmengine ckpts need False."""
+    import torch
+
+    if getattr(torch.load, "_mmdet_adapter_patched", False):
+        return
+
+    _orig = torch.load
+
+    def _load(*args: Any, **kwargs: Any) -> Any:
+        kwargs.setdefault("weights_only", False)
+        return _orig(*args, **kwargs)
+
+    _load._mmdet_adapter_patched = True  # type: ignore[attr-defined]
+    torch.load = _load  # type: ignore[assignment]
+
+
+def _resolve_config(args: argparse.Namespace) -> str:
+    if args.config:
+        return os.path.expanduser(args.config)
+    env_cfg = os.environ.get("MMDET_CONFIG", "").strip()
+    if env_cfg:
+        return os.path.expanduser(env_cfg)
+    return str(DEFAULT_CONFIG)
+
+
+def _class_names(model: Any) -> list[str]:
+    meta = getattr(model, "dataset_meta", None) or {}
+    classes = meta.get("classes")
+    if isinstance(classes, (list, tuple)) and classes:
+        return [str(c) for c in classes]
+    return ["class_0"]
+
+
+def _det_to_dicts(result: Any, threshold: float, class_names: list[str]) -> list[dict[str, Any]]:
+    """Convert mmdet DetDataSample / legacy results to old DetectionClient schema."""
+    pred = getattr(result, "pred_instances", None)
+    if pred is None:
+        return []
+
+    scores = pred.scores.detach().cpu().tolist()
+    bboxes = pred.bboxes.detach().cpu().tolist()
+    labels = pred.labels.detach().cpu().tolist()
+
+    out: list[dict[str, Any]] = []
+    for score, box, lab in zip(scores, bboxes, labels):
+        if float(score) < threshold:
+            continue
+        if len(box) < 4:
+            continue
+        idx = int(lab)
+        label = class_names[idx] if 0 <= idx < len(class_names) else str(idx)
+        out.append(
+            {
+                "x1": int(round(box[0])),
+                "y1": int(round(box[1])),
+                "x2": int(round(box[2])),
+                "y2": int(round(box[3])),
+                "label": label,
+                "score": float(score),
+            }
+        )
+    return out
 
 
 class DetectorBackend:
@@ -65,20 +136,25 @@ class DetectorBackend:
         self.mode = "mock"
         self.num_classes = 2
         self._model = None
+        self._class_names: list[str] = ["signal", "burst"]
         self._init_error: Optional[str] = None
 
         has_mmdet, msg = try_import_mmdet()
         weights_ok = bool(args.weights) and os.path.isfile(os.path.expanduser(args.weights))
+        config_path = _resolve_config(args)
+        config_ok = bool(config_path) and os.path.isfile(config_path)
 
         if args.force_mock:
             self.mode = "mock"
             self._init_error = "force-mock enabled"
             return
 
-        if has_mmdet and weights_ok:
+        if has_mmdet and weights_ok and config_ok:
             try:
-                self._model = self._build_mmdet_model()
+                self._model = self._build_mmdet_model(config_path)
                 self.mode = "mmdet"
+                self._class_names = _class_names(self._model)
+                self.num_classes = max(1, len(self._class_names))
             except Exception as exc:  # noqa: BLE001
                 self.mode = "mock"
                 self._init_error = f"mmdet build failed, fallback mock: {exc}"
@@ -88,35 +164,24 @@ class DetectorBackend:
                 reasons.append(msg)
             if not weights_ok:
                 reasons.append("weights missing or not a file")
+            if not config_ok:
+                reasons.append(f"config missing: {config_path}")
             self.mode = "mock"
             self._init_error = "; ".join(reasons)
 
-    def _build_mmdet_model(self) -> Any:
-        """Build real mmdet model.
+    def _build_mmdet_model(self, config_path: str) -> Any:
+        _patch_torch_load_for_mmengine()
+        from mmdet.apis import init_detector
 
-        TODO(你/实验室): 按新模型的实际 config + checkpoint 写法替换这里。
-        下面保留最小占位，避免在没有完整依赖时硬崩。
-        """
-        # Example placeholder for OpenMMLab style:
-        # from mmdet.apis import init_detector
-        # config = self.args.config or "configs/xxx.py"
-        # return init_detector(config, self.args.weights, device=self.args.device)
-        raise RuntimeError(
-            "run_mmdet_infer/build not wired yet. "
-            "Fill _build_mmdet_model() and run_mmdet_infer() with your new model."
-        )
+        weights = os.path.expanduser(self.args.weights)
+        return init_detector(config_path, weights, device=self.args.device)
 
     def run_mmdet_infer(self, image_path: str) -> list[dict[str, Any]]:
-        """Run real model and convert output to old detections schema.
+        """Run real model and convert output to old detections schema."""
+        from mmdet.apis import inference_detector
 
-        Must return list of:
-          {"x1":int, "y1":int, "x2":int, "y2":int, "label":str, "score":float}
-        """
-        # TODO(你/实验室):
-        # from mmdet.apis import inference_detector
-        # result = inference_detector(self._model, image_path)
-        # Convert result -> old detections, apply self.args.threshold
-        raise RuntimeError("run_mmdet_infer() not implemented for the new model yet")
+        result = inference_detector(self._model, image_path)
+        return _det_to_dicts(result, self.args.threshold, self._class_names)
 
     def run_mock_infer(self, image_path: str) -> list[dict[str, Any]]:
         """基础库/联调路径：不依赖 mmdet，保证协议可测通。"""

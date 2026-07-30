@@ -24,12 +24,17 @@ python3 integration/smoke_test.py
 
 ## 3. Jetson 上怎么接真模型
 
-1. `conda activate <环境名>`
-2. `bash integration/install_on_jetson.sh`
-3. 打开 `mmdet_adapter_server.py`，填写：
-   - `_build_mmdet_model()`
-   - `run_mmdet_infer()`
-4. 用旧分割端原来的方式启动这个 server（参数保持 `--weights/--model/--threshold/--imgsz/--device`）
+1. `conda activate usrp_dev`（或你的环境）
+2. 确认 `mmcv` CUDA ops 可用：`python -c "from mmcv.ops import roi_align; print('ok')"`
+3. 补齐 config 依赖的 `_base_`（只需一次）：
+   ```bash
+   ln -sfn "$CONDA_PREFIX/lib/python3.11/site-packages/mmdet/.mim/configs/_base_" \
+     /home/sribd/333/mmdet_configs/_base_
+   ```
+4. 适配器已接好 Faster R-CNN IQ config + `init_detector` / `inference_detector`；
+   默认 config：`mmdet_configs/my_iq_project/my_fasterrcnn_binary_swin_t_iq.py`
+   （也可用 `--config` 或环境变量 `MMDET_CONFIG`）
+5. 用旧分割端原来的方式启动（参数保持 `--weights/--model/--threshold/--imgsz/--device`）
 
 ## 4. 千万别改的协议字段
 
