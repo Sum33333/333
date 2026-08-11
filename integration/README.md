@@ -21,6 +21,8 @@ python3 integration/smoke_test.py
 | `mmdet_adapter_server.py` | 新模型适配器（mmdet 优先，失败自动 mock） |
 | `smoke_test.py` | 一键验证协议 |
 | `install_on_jetson.sh` | Jetson conda 环境安装脚本 |
+| `bench_detector_timing.py` | 检测子进程加载 + 推理往返耗时 |
+| `probe_zmq_rates.py` | 外部探针：STFT(5560) / 结果(5571) 消息速率（不改 segmenter） |
 
 ## 3. Jetson 上怎么接真模型
 
