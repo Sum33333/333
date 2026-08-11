@@ -24,6 +24,8 @@ python3 integration/smoke_test.py
 | `bench_detector_timing.py` | 检测子进程加载 + 推理往返耗时 |
 | `probe_zmq_rates.py` | 外部探针：STFT(5560) / 结果(5571) 消息速率（不改 segmenter） |
 
+实测效率总表见：`docs/pipeline_runtime_efficiency.md`
+
 ## 3. Jetson 上怎么接真模型
 
 1. `conda activate usrp_dev`（或你的环境）
