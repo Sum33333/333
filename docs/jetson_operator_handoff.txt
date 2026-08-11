@@ -1,0 +1,342 @@
+================================================================================
+Jetson 实时频谱分割系统 · 交接操作说明（纯文本）
+机器用户：sribd@sribd（NVIDIA Jetson / Thor aarch64）
+Conda 环境：usrp_dev
+最后整理：按当前已联调通的状态（USRP X310 + mmdet Faster R-CNN + 瀑布图分割）
+================================================================================
+
+一、系统在干什么（一句话）
+--------------------------------------------------------------------------------
+USRP 采 IQ → untitled1.py 做 STFT 并发布 → segmentation_engineer_receiver 收频谱、
+画瀑布图、调检测子进程画框 → 把分割结果用 ZMQ 发出去（下游可读 signal_type）。
+
+
+二、数据流与端口
+--------------------------------------------------------------------------------
+1) USRP X310
+   - 当前设备 IP：192.168.101.5
+   - 序列号：323855A
+   - Jetson 有线网口：enP2p1s0 = 192.168.101.1/24
+   - 路由必须走 enP2p1s0（否则流量可能走 WiFi，设备找不到）
+
+2) STFT 发布
+   - 脚本：/home/sribd/usrp_client/untitled1.py
+   - 地址：tcp://127.0.0.1:5560
+   - 目标帧率：20 FPS（实测约 20.3 FPS）
+
+3) 分割端订阅 / 结果发布
+   - 脚本：/home/sribd/111/segmentation_engineer_receiver.py
+   - 订阅 STFT：tcp://127.0.0.1:5560
+   - 发布结果：tcp://*:5571 ，topic = seg.v1
+
+4) 检测子进程
+   - 分割端通过 DetectionClient 启动 detection_server.py
+   - 当前软链：
+       /home/sribd/111/detection_server.py
+       /home/sribd/jetson/detection_server.py
+     都指向：
+       /home/sribd/333/integration/mmdet_adapter_server.py
+   - 权重（当前）：/home/sribd/111/epoch_100_stream.pth
+     （若是软链，可能指向同目录下的 epoch_100_stream 实文件）
+   - 配置：/home/sribd/333/mmdet_configs/my_iq_project/my_fasterrcnn_swin_t_iq.py
+     （14 类；仓库里还有 binary 版 my_fasterrcnn_binary_swin_t_iq.py）
+   - 协议：stdin 一行图片路径 → stdout 一行 JSON
+     ready: {"status":"ready", ...}
+     ok:    {"status":"ok","detections":[{"x1","y1","x2","y2","label","score"}, ...]}
+
+
+三、关键路径一览
+--------------------------------------------------------------------------------
+仓库（适配器 / 配置 / 测速脚本）：
+  /home/sribd/333
+    integration/mmdet_adapter_server.py     # 真检测服务（适配旧接口）
+    integration/bench_detector_timing.py    # 检测器加载+推理计时
+    integration/probe_zmq_rates.py          # 外部测 5560/5571 速率
+    integration/smoke_test.py               # 协议冒烟（可用 mock）
+    mmdet_configs/my_iq_project/...         # mmdet 配置
+    docs/pipeline_runtime_efficiency.md     # 已测效率表
+    docs/jetson_mmdet_deploy_steps.md       # 环境安装记录
+
+采集端：
+  /home/sribd/usrp_client/untitled1.py
+
+分割 / 可视化端：
+  /home/sribd/111/segmentation_engineer_receiver.py
+
+Conda：
+  /home/sribd/miniforge3/envs/usrp_dev
+
+
+四、每次开机 / 联调前：网口（必做检查）
+--------------------------------------------------------------------------------
+sudo ip link set enP2p1s0 up
+sudo ip addr add 192.168.101.1/24 dev enP2p1s0 2>/dev/null || true
+sudo ip route replace 192.168.101.0/24 dev enP2p1s0
+
+检查：
+  ip -4 addr show enP2p1s0
+  ping -c 2 192.168.101.5
+  conda activate usrp_dev
+  uhd_find_devices
+应看到 serial=323855A, addr=192.168.101.5
+
+若 untitled1.py 里写的还是旧地址（.100 / 323854B），改默认值或启动时传参：
+  --device-ip 192.168.101.5 --serial 323855A
+
+注意：若有残留 untitled1.py 占着 USRP，会报 No devices found。先：
+  pkill -f untitled1.py
+再重启。
+
+
+五、怎么运行（推荐：三个终端）
+--------------------------------------------------------------------------------
+
+【终端 A】STFT 采集 + 发布（必须加 --enable-stft-pub，默认是关的）
+
+conda activate usrp_dev
+cd /home/sribd/usrp_client
+unset QT_QPA_PLATFORM_PLUGIN_PATH
+export QT_QPA_PLATFORM=offscreen
+python untitled1.py \
+  --device-ip 192.168.101.5 \
+  --serial 323855A \
+  --enable-stft-pub \
+  --stft-pub-address tcp://127.0.0.1:5560 \
+  --stft-publish-fps 20
+
+成功标志：
+  STFT发布已启用: tcp://127.0.0.1:5560
+  STFT目标帧率: 20.00 FPS
+  STFT实际帧率: 约 20.35 FPS
+
+
+【终端 B】分割端 + 可视化（GUI）
+
+conda activate usrp_dev
+export QT_QPA_PLATFORM_PLUGIN_PATH=$CONDA_PREFIX/lib/qt6/plugins/platforms
+# GUI 不要设 QT_QPA_PLATFORM=offscreen
+python /home/sribd/111/segmentation_engineer_receiver.py
+
+成功标志：
+  detector ready / backend_mode 类似 mmdet
+  窗口出现瀑布图，有检测框时会画在图上
+
+无显示器 / 只要链路时可用 headless（无 GUI）：
+  QT_QPA_PLATFORM=offscreen python /home/sribd/111/segmentation_engineer_receiver.py --headless
+
+
+【终端 C】（可选）看端口 / 测速
+
+conda activate usrp_dev
+ss -lntp | egrep '5560|5571'
+# 应看到 127.0.0.1:5560 和 0.0.0.0:5571
+
+python /home/sribd/333/integration/probe_zmq_rates.py --duration 10
+
+
+六、怎么看可视化结果
+--------------------------------------------------------------------------------
+1) 主可视化：终端 B 的 Qt 窗口（segmentation_engineer_receiver.py GUI）
+   - 瀑布图实时刷新
+   - 检测框叠在频谱窗口上
+   - 框的类别来自 detections[].label；事件里另有 signal_type 字段给下游
+
+2) 下游 ZMQ 结果（不是 GUI，是数据）：
+   topic: seg.v1
+   地址: tcp://127.0.0.1:5571
+   事件里应有 signal_type（等于检测 label 字符串，例如 class_7）
+
+3) 若 GUI 打不开：
+   - 检查 QT_QPA_PLATFORM_PLUGIN_PATH 是否指向 conda 的 qt6 platforms
+   - STFT 端要用 offscreen，且 unset QT_QPA_PLATFORM_PLUGIN_PATH（两套 Qt 环境不要混）
+
+
+七、怎么测试
+--------------------------------------------------------------------------------
+
+1) 协议冒烟（不依赖 USRP，可用 mock）
+   cd /home/sribd/333
+   conda activate usrp_dev
+   python integration/smoke_test.py
+   期望：SMOKE TEST PASSED
+
+2) 检测器单独计时（子进程协议往返）
+   cd /home/sribd/333
+   conda activate usrp_dev
+   python integration/bench_detector_timing.py \
+     --weights /home/sribd/111/epoch_100_stream.pth \
+     --config /home/sribd/333/mmdet_configs/my_iq_project/my_fasterrcnn_swin_t_iq.py \
+     --device cuda:0 \
+     --runs 10 --warmup 2
+   参考结果：load ≈ 4.3 s；稳定往返 ≈ 106 ms（≈ 9.4 FPS）
+
+3) 单张图纯推理（不经子进程）
+   需先 patch torch.load(weights_only=False)，见仓库文档/此前命令。
+   参考结果：mean ≈ 105.13 ms（与上面一致）
+
+4) 管线 ZMQ 速率（USRP + 分割端都在跑时）
+   python /home/sribd/333/integration/probe_zmq_rates.py --duration 10
+   参考结果：
+     stft ≈ 20.3 Hz，间隔 ≈ 49 ms
+     result(seg.v1) ≈ 21 Hz（与 STFT 基本同频；可含 events=0）
+
+5) 确认软链正确
+   ls -l /home/sribd/111/detection_server.py /home/sribd/jetson/detection_server.py
+   应指向 .../333/integration/mmdet_adapter_server.py
+
+6) 确认 mmcv CUDA ops
+   conda activate usrp_dev
+   python -c "from mmcv.ops import roi_align; print('ok')"
+
+
+八、相关脚本 ↔ 关键类 / 函数（改哪里看这里）
+--------------------------------------------------------------------------------
+
+【A】采集 / STFT 发布
+  文件：/home/sribd/usrp_client/untitled1.py
+  作用：USRP 源 + STFT 抽取 + ZMQ PUB(5560)
+  常改：
+    - 设备 IP / serial：__init__ 默认参数，或 argparse --device-ip / --serial
+    - 是否发布 STFT：--enable-stft-pub
+    - 发布地址 / 帧率：--stft-pub-address / --stft-publish-fps
+    - 中心频率 / 采样率 / 增益：对应 argparse
+
+【B】分割端 + GUI + 结果发布（泽慧原系统）
+  文件：/home/sribd/111/segmentation_engineer_receiver.py
+  关键类 / 函数：
+    - class DetectionClient
+        __init__          # subprocess 启动 detection_server.py
+        infer_image()     # stdin 发 PNG 路径，stdout 收 JSON
+    - class WindowSegmenter
+        segment_window()  # STFT 窗口 → 渲染 PNG → infer_image → 框映射回频谱
+    - _run_gui() / _run_headless() / main()
+        # 收 5560、攒窗、显示、往 5571 发 seg.v1
+  常改：
+    - 权重 / jetson 目录 / venv：文件顶部 FIXED_* 常量
+      （FIXED_WEIGHTS、FIXED_JETSON、阈值、imgsz 等）
+    - 检测调用节奏：detect interval（每 N 帧检测一次）相关逻辑
+    - 可视化：瀑布图绘制、画框相关函数（在同文件 GUI 部分）
+    - 下游字段：events 里的 signal_type（已加；改字段名会影响下游，勿随意改协议）
+  注意：JSON 对外字段名尽量别改（detections 的 x1/y1/x2/y2/label/score）
+
+【C】检测适配器（潘博 mmdet 模型接入）
+  文件：/home/sribd/333/integration/mmdet_adapter_server.py
+  （经软链对外仍叫 detection_server.py）
+  关键类 / 函数：
+    - parse_args()
+    - DetectorBackend.__init__          # 选 mmdet 或 mock
+    - DetectorBackend._build_mmdet_model # init_detector 加载
+    - DetectorBackend.run_mmdet_infer    # inference_detector + 转旧格式
+    - DetectorBackend.run_mock_infer     # 无模型联调
+    - DetectorBackend.infer
+    - _det_to_dicts()                    # mmdet 结果 → detections[]
+    - _patch_torch_load_for_mmengine()   # PyTorch 2.6+ weights_only 补丁
+    - main()                             # ready 循环 + stdin 读路径
+  常改：
+    - 换权重：分割端 FIXED_WEIGHTS，或启动参数 --weights
+    - 换配置：环境变量 MMDET_CONFIG，或 --config
+      默认文件里 DEFAULT_CONFIG 指向 binary 配置；当前实跑用 14 类
+      my_fasterrcnn_swin_t_iq.py（请确认分割端/软链启动时传入的 config）
+    - 换类别名 / 分数阈值：_det_to_dicts()、--threshold
+    - 换模型结构：改 mmdet_configs 下对应 config，并保证权重匹配
+    - 只改推理、保持协议：主要改 run_mmdet_infer / _det_to_dicts
+      不要改 stdout JSON 字段名
+
+【D】mmdet 训练配置（一般在训练服务器改，再拷权重到 Jetson）
+  Jetson 上副本：
+    /home/sribd/333/mmdet_configs/my_iq_project/my_fasterrcnn_swin_t_iq.py
+    /home/sribd/333/mmdet_configs/my_iq_project/my_fasterrcnn_binary_swin_t_iq.py
+  需要 _base_ 软链一次：
+    ln -sfn "$CONDA_PREFIX/lib/python3.11/site-packages/mmdet/.mim/configs/_base_" \
+      /home/sribd/333/mmdet_configs/_base_
+
+【E】测速 / 工具脚本
+  /home/sribd/333/integration/bench_detector_timing.py
+  /home/sribd/333/integration/probe_zmq_rates.py
+  /home/sribd/333/integration/smoke_test.py
+  /home/sribd/333/integration/patch_segmenter_timing.py
+    # 可选：给分割端打阶段计时补丁（一般不必）
+
+
+九、后续常见改动该动哪里（速查）
+--------------------------------------------------------------------------------
+改 USRP IP / 序列号
+  → untitled1.py 默认值或命令行 --device-ip / --serial
+
+改 STFT 帧率 / 是否发布
+  → untitled1.py：--stft-publish-fps / --enable-stft-pub
+
+改检测权重
+  → segmentation_engineer_receiver.py 顶部 FIXED_WEIGHTS
+    并保证文件存在（当前用 epoch_100_stream.pth）
+
+换新训练好的 mmdet 模型（同类 Faster R-CNN）
+  → 更新权重文件 + 必要时更新 mmdet_configs 对应 config
+  → 适配器一般不用改协议，最多改 _det_to_dicts / threshold
+
+换完全不同的检测框架（非 mmdet）
+  → 主要改 mmdet_adapter_server.py 的 _build_mmdet_model / run_mmdet_infer
+  → 仍必须输出旧 detections JSON
+
+改置信度阈值 / 输入尺寸
+  → 分割端 FIXED_THRESHOLD / FIXED_DETECT_IMGSZ
+    或 DetectionClient 传给子进程的 --threshold / --imgsz
+
+改可视化外观（颜色、窗长、是否画框）
+  → segmentation_engineer_receiver.py GUI / 渲染相关函数
+    （WindowSegmenter 渲染 PNG 与画框部分）
+
+改下游结果字段 / topic
+  → segmentation_engineer_receiver.py 发布 seg.v1 的组包处
+  → 若改 signal_type 或 detections 字段名，下游必须同步
+
+改检测调用频率（每 N 帧一次）
+  → segmentation_engineer_receiver.py 里 detect interval 相关逻辑
+
+
+十、已知性能（便于对比是否变慢）
+--------------------------------------------------------------------------------
+检测器加载：约 4.3 s
+首次推理预热：约 700 ms
+稳定单次推理：约 105–106 ms（≈ 9.4 FPS 上限）
+STFT 发布：约 20.3 Hz
+结果发布 seg.v1：约 21 Hz（与 STFT 基本同频）
+详情：/home/sribd/333/docs/pipeline_runtime_efficiency.md
+
+
+十一、常见故障
+--------------------------------------------------------------------------------
+1) No devices found
+   - 检查网口 IP/路由、ping 192.168.101.5、uhd_find_devices
+   - 杀掉残留 untitled1.py
+   - 确认脚本 IP/serial 与真机一致
+
+2) probe 测到 n=0
+   - STFT / 分割端没在跑，或 STFT 没加 --enable-stft-pub
+
+3) detector 不是 mmdet / 走了 mock
+   - 检查权重路径、config、mmcv.ops、软链是否指向 adapter
+
+4) torch.load weights_only 报错
+   - 应走 adapter（已 patch）；裸跑 init_detector 需自行 patch
+
+5) Qt / 字体 / 插件报错
+   - 分割端：设置 QT_QPA_PLATFORM_PLUGIN_PATH 到 conda qt6 platforms
+   - STFT 端：QT_QPA_PLATFORM=offscreen，并 unset QT_QPA_PLATFORM_PLUGIN_PATH
+
+6) numpy / GNU Radio 冲突
+   - usrp_dev 中 numpy 钉在 1.26.4（不要随意升到 2.x）
+
+
+十二、给下一位同学的最短启动清单
+--------------------------------------------------------------------------------
+1. 接好网线，执行第四节网口命令，ping 通 192.168.101.5
+2. 终端 A 启动 untitled1.py（带 --enable-stft-pub）
+3. 终端 B 启动 segmentation_engineer_receiver.py，看 GUI 瀑布图与框
+4. 可选：终端 C 跑 probe_zmq_rates.py 确认 5560/5571 有流量
+5. 要改模型：先换权重/config，再确认 detection_server.py 软链仍指向
+   /home/sribd/333/integration/mmdet_adapter_server.py
+
+================================================================================
+完
+================================================================================
