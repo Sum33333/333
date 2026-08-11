@@ -193,9 +193,17 @@ class DetectorBackend:
         """Run real model and convert output to old detections schema."""
         from mmdet.apis import inference_detector
 
+        t0 = time.perf_counter()
         with _StdoutToStderr():
             result = inference_detector(self._model, image_path)
-        return _det_to_dicts(result, self.args.threshold, self._class_names)
+        infer_ms = (time.perf_counter() - t0) * 1000.0
+        dets = _det_to_dicts(result, self.args.threshold, self._class_names)
+        # Keep stdout JSON-only; timing goes to stderr for profiling.
+        sys.stderr.write(
+            f"[TIMING] module=detector_infer ms={infer_ms:.2f} n_dets={len(dets)}\n"
+        )
+        sys.stderr.flush()
+        return dets
 
     def run_mock_infer(self, image_path: str) -> list[dict[str, Any]]:
         """基础库/联调路径：不依赖 mmdet，保证协议可测通。"""
